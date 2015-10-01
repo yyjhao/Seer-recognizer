@@ -5,7 +5,7 @@ def main():
   cap = cv2.VideoCapture('../videos/football_mid.mp4')
   while True:
     ret, frame = cap.read()
-    if ret:   
+    if ret:
       # convert frame to grayscale
       frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
