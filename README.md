@@ -1,3 +1,1 @@
-- [x] set up Github tasks (yujian)
-- [ ] stiching (yujian)
-- [ ] motion tracking (larry)
+# Project for module CS4342
