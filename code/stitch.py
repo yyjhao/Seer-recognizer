@@ -60,8 +60,10 @@ right_w = right.get(cv.CV_CAP_PROP_FRAME_WIDTH)
 
 h = left.get(cv.CV_CAP_PROP_FRAME_HEIGHT)
 
+fps = left_w.get(cv2.cv.CV_CAP_PROP_FPS)
+
 fourcc = cv2.cv.CV_FOURCC(*"MPEG")
-output = cv2.VideoWriter('./stitched.mpeg', fourcc, 20.0, (int(left_add + mid_w + right_add), int(h)))
+output = cv2.VideoWriter('./stitched.mpeg', fourcc, fps, (int(left_add + mid_w + right_add), int(h)))
 
 count = 0
 while True:
