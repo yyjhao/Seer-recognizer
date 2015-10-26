@@ -3,9 +3,10 @@ Provides methods to transform any point on the original field to a point on the 
 '''
 import cv2
 import numpy as np
+from player_detector import getPlayers
 
 def getHomographyMatrix():
-    img = cv2.imread('../images/FootballField.jpg')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread('../images/FootballField_small.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     
     # Define the 4 corner of the football field (target points), thereby the width will be kept and only the height adjusted
     # so we don't accidently lose to many information
@@ -16,55 +17,23 @@ def getHomographyMatrix():
     
     #newImg = np.zeros([ratio*img.shape[1], img.shape[1],3])
     
-    target_pts = np.zeros([7,2])
+    target_pts = np.zeros([5,2])
     target_pts[0,:] = [0,0]                     # Top left (image is orientated to the top left)
-    target_pts[1,:] = [0,img.shape[1]-1]        # Top right
-    target_pts[2,:] = [img.shape[0]-1,img.shape[1]-1]     # Bottom right
-    target_pts[3,:] = [img.shape[0]-1,0]     # Bottom left
+    target_pts[1,:] = [0, img.shape[1]-1]        # Top right
+    target_pts[2,:] = [ img.shape[0]-1, img.shape[1]-1]     # Bottom right
+    target_pts[3,:] = [img.shape[0]-1, 0]     # Bottom left
     target_pts[4,:] = [img.shape[0]/2,img.shape[1]/2]     # Center points
-    target_pts[5,:] = [img.shape[0]/2,619]     # 11m right side
-    target_pts[6,:] = [img.shape[0]/2,82]     # 11m left side
     
     ## Points on the image
-    pts = np.zeros([7,2])
-    pts[0,:] = [246, 3042] # y, x
-    pts[1,:] = [227, 5360]
-    pts[2,:] = [999,8680] # Bottom right (outside of the image)
-    pts[3,:] = [1042, 52]
-    pts[4,:] = [400, 4267] # Center
-    pts[5,:] = [386, 5676] # 11m right side
-    pts[6,:] = [416, 2788] # 11m left side
+    pts = np.zeros([5,2])
+    pts[0,:] = [3042,246] # x, y
+    pts[1,:] = [5360, 227]
+    pts[2,:] = [8680, 999] # Bottom right (outside of the image)
+    pts[3,:] = [52, 1042]
+    pts[4,:] = [4267, 400] # Center
     
     # Calculate the homography matrix, which will be used to project any point from the video to the top down view.
     return homography(target_pts, pts) 
-
-    '''
-    print H
-    
-    #a = np.array([318,344,1])
-    #a = np.array([225,97,1])
-    a = np.dot(H,np.array([225,97,1]))
-    a = a/a[2]
-    print a,getTransformationCoords(H, [225,97])
-    a = np.dot(H,np.array([206,632,1]))
-    a = a/a[2]
-    print a,getTransformationCoords(H, [206,632])
-    a = np.dot(H,np.array([img.shape[0]-1,img.shape[1]-1,1]))
-    a = a/a[2]
-    print a,getTransformationCoords(H, [img.shape[0]-1,img.shape[1]-1])
-    
-    a = np.dot(H,np.array([img.shape[0]-1,0,1]))
-    a = a/a[2]
-    print a,getTransformationCoords(H, [img.shape[0]-1,0])
-    print getTransformationCoords(H, [318,344])
-    #a = np.array([206,632,1])
-    #b = np.dot(H,a)
-    
-    
-    #newImg[int(b[0]),int(b[1])] = 255
-    #cv2.imshow('new img', newImg)
-    #cv2.waitKey(0)
-    '''
     
 # Transforms 2d points to 2d points on another plane
 def getTransformationCoords(H, point):
@@ -92,19 +61,50 @@ def homography(target_pts, source_pts):
 
 
 def test():
-    img = cv2.imread('../images/FootballField.jpg')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread('../images/FootballField_small.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     H = getHomographyMatrix()
+    
+    cap = cv2.VideoCapture('../videos/stitched_fixed.mpeg')
+    
+    i = 0
+    while i < 20:
+        i = i + 1
+        ret, frame = cap.read()
+    
+    cv2.imwrite('frame20.jpg', frame)
+    players = getPlayers(frame)    
+    img = addPlayers(img, H, players)
+    
+    cap.release()
     #a = np.array([318,344,1])
     #a = np.array([225,97,1])
-    b = np.zeros([2,2])
-    b[0,:] = getTransformationCoords(H, [416,2788])
-    b[1,:] = getTransformationCoords(H, [386, 5676])
-   
-    img[int(b[0,0]),int(b[0,1])] = [0,0,255]
-    img[int(b[1,0]),int(b[1,1])] = [0,0,255]
+    cv2.imwrite('frame20_topDown.jpg', img)
     cv2.imshow('new img', img)
     cv2.waitKey(0)
-    pass
+
+# Add all players in the given players list to the field
+# img: image to add the 
+#
+def addPlayers(img, H, players):
+    a = np.zeros([2])
+    i = 0
+    for player in players:
+        i = i + 1
+        x = player[0][0]+player[0][2]/2.0
+        y = player[0][1]+player[0][3]
+        a = getTransformationCoords(H, [x,y])
+        try:
+            for i in xrange(5):
+                for j in xrange(5):
+                    if i+j <= 5 :
+                        img[int(a[0]+i),int(a[1]+j)] = player[1]
+                        img[int(a[0]+i),int(a[1]-j)] = player[1]
+                        img[int(a[0]-i),int(a[1]+j)] = player[1]
+                        img[int(a[0]-i),int(a[1]-j)] = player[1]
+        except IndexError:
+            print 'Player '+str(i)+' out side the field!'
+            
+    return img
 
 if __name__ == '__main__':
     test()
