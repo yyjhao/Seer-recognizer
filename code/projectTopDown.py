@@ -6,7 +6,7 @@ import numpy as np
 from player_detector import getPlayers
 
 def getHomographyMatrix():
-    img = cv2.imread('../images/FootballField_small.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     
     # Define the 4 corner of the football field (target points), thereby the width will be kept and only the height adjusted
     # so we don't accidently lose to many information
@@ -16,21 +16,79 @@ def getHomographyMatrix():
     #ratio = FIELD_HEIGHT/FIELD_WIDTH
     
     #newImg = np.zeros([ratio*img.shape[1], img.shape[1],3])
+    border = 50
+    target_pts = np.zeros([21,2])
+    '''
+    target_pts[0,:] = [border+69,border+295]
+    target_pts[1,:] = [border+69,border+505]
+    target_pts[2,:] = [border+190,border+170]
+    target_pts[3,:] = [border+190,border+630]
+    target_pts[4,:] = [border+230,border+400]
+    target_pts[5,:] = [border+494,border+400]
+    target_pts[6,:] = [border+706,border+400]
+    target_pts[7,:] = [border+970,border+400]
+    target_pts[8,:] = [border+1010,border+170]
+    target_pts[9,:] = [border+1010,border+630]
+    target_pts[10,:] = [border+1131,border+295]
+    target_pts[11,:] = [border+1131,border+505]
+    target_pts[12,:] = [border+1195,border+295]
+    target_pts[13,:] = [border+1195,border+505]
+    target_pts[14,:] = [border+5,border+295]
+    target_pts[15,:] = [border+5,border+505]
+    '''
+    target_pts[0,:] = [border+295,border+69]
+    target_pts[1,:] = [border+505,border+69]
+    target_pts[2,:] = [border+170,border+190]
+    target_pts[3,:] = [border+630,border+190]
+    target_pts[4,:] = [border+400,border+230]
+    target_pts[5,:] = [border+400,border+494]
+    target_pts[6,:] = [border+400,border+706]
+    target_pts[7,:] = [border+400,border+970]
+    target_pts[8,:] = [border+170,border+1010]
+    target_pts[9,:] = [border+630,border+1010]
+    target_pts[10,:] = [border+295,border+1131]
+    target_pts[11,:] = [border+505,border+1131]
+    target_pts[12,:] = [border+295,border+1195]
+    target_pts[13,:] = [border+505,border+1195]
+    target_pts[14,:] = [border+295,border+5]
+    target_pts[15,:] = [border+505,border+5]
+    ## Corners and center
+    target_pts[16,:] = [border,border]                     # Top left (image is orientated to the top left)
+    target_pts[17,:] = [border, img.shape[1]-1-border]        # Top right
+    target_pts[18,:] = [ img.shape[0]-1-border, img.shape[1]-1-border]     # Bottom right
+    target_pts[19,:] = [img.shape[0]-1-border, border]     # Bottom left
+    target_pts[20,:] = [(img.shape[0])/2,img.shape[1]/2]     # Center points
     
-    target_pts = np.zeros([5,2])
-    target_pts[0,:] = [0,0]                     # Top left (image is orientated to the top left)
-    target_pts[1,:] = [0, img.shape[1]-1]        # Top right
-    target_pts[2,:] = [ img.shape[0]-1, img.shape[1]-1]     # Bottom right
-    target_pts[3,:] = [img.shape[0]-1, 0]     # Bottom left
-    target_pts[4,:] = [img.shape[0]/2,img.shape[1]/2]     # Center points
+    
     
     ## Points on the image
-    pts = np.zeros([5,2])
-    pts[0,:] = [3042,246] # x, y
-    pts[1,:] = [5360, 227]
-    pts[2,:] = [8680, 999] # Bottom right (outside of the image)
-    pts[3,:] = [52, 1042]
-    pts[4,:] = [4267, 400] # Center
+    pts = np.zeros([21,2])
+    ## Special points on the image
+    pts[0,:] = [2785,355] #a
+    pts[1,:] = [2279, 504]
+    pts[2,:] = [3305, 297]
+    pts[3,:] = [2380, 656]
+    pts[4,:] = [3151, 407]
+    pts[5,:] = [3955, 399]
+    pts[6,:] = [4580, 399]
+    pts[7,:] = [5386, 397]
+    pts[8,:] = [5152, 280]
+    pts[9,:] = [6174, 624]
+    pts[10,:] = [5645, 329]
+    pts[11,:] = [6182, 468]
+    pts[12,:] = [5802, 327]
+    pts[13,:] = [6405, 467]
+    pts[14,:] = [2613, 355]
+    pts[15,:] = [2037, 508] #p
+    
+    ## Corners and center
+    pts[16,:] = [3042,247] # x, y
+    pts[17,:] = [5360, 227]
+    pts[18,:] = [8680, 999] # Bottom right (outside of the image)
+    pts[19,:] = [50, 1042]
+    pts[20,:] = [4267, 400] # Center
+    
+    
     
     # Calculate the homography matrix, which will be used to project any point from the video to the top down view.
     return homography(target_pts, pts) 
@@ -59,6 +117,56 @@ def homography(target_pts, source_pts):
     # Normalize H and return the matrix
     return H / H[2][2]
 
+def evalMapping():
+    img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    H = getHomographyMatrix()
+    
+    # Define relevant points on the original field
+    pts = np.zeros([21,2])
+    pts[0,:] = [2785,355]
+    pts[1,:] = [2279, 504]
+    pts[2,:] = [3305, 297]
+    pts[3,:] = [2380, 656]
+    pts[4,:] = [3151, 407]
+    pts[5,:] = [3955, 399]
+    pts[6,:] = [4580, 399]
+    pts[7,:] = [5386, 397]
+    pts[8,:] = [5152, 280]
+    pts[9,:] = [6174, 624]
+    pts[10,:] = [5645, 329]
+    pts[11,:] = [6182, 468]
+    pts[12,:] = [5802, 327]
+    pts[13,:] = [6405, 467]
+    pts[14,:] = [2613, 355]
+    pts[15,:] = [2037, 508]
+    
+    # Corners and center
+    pts[16,:] = [3042,246] # x, y
+    pts[17,:] = [5360, 227]
+    pts[18,:] = [8680, 999] # Bottom right (outside of the image)
+    pts[19,:] = [52, 1042]
+    pts[20,:] = [4267, 400] # Center
+    
+    a = np.zeros([2])
+    i = 0
+    for pt in pts:
+        i = i + 1
+        a = getTransformationCoords(H, [pt[0],pt[1]])
+        try:
+            for i in xrange(5):
+                for j in xrange(5):
+                    if i+j <= 5 :
+                        img[int(a[0]+i),int(a[1]+j)] = [0,0,255]
+                        img[int(a[0]+i),int(a[1]-j)] = [0,0,255]
+                        img[int(a[0]-i),int(a[1]+j)] = [0,0,255]
+                        img[int(a[0]-i),int(a[1]-j)] = [0,0,255]
+        except IndexError:
+            print 'Player '+str(i)+' out side the field!'
+    
+    cv2.imwrite('EvalField.jpg', img)        
+    cv2.imshow('new img', img)
+    cv2.waitKey(0)
+    
 
 def test():
     img = cv2.imread('../images/FootballField_small.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
@@ -107,4 +215,5 @@ def addPlayers(img, H, players):
     return img
 
 if __name__ == '__main__':
-    test()
+    #test()
+    evalMapping()
