@@ -7,16 +7,24 @@ import copy
 from player_detector import getPlayers
 
 BORDER = 50
+PATH_TOP_DOWN_IMG = '../images/FootballField_small_border.png'
+WIDTH_TD_IMG = 1300
+HEIGHT_TD_IMG = 900
+
+# Dimensions of the field in m without borders
+FIELD_HEIGHT = 70.0
+FIELD_WIDTH = 105.0
+
+# Distance of one pixel
+PX_TO_M = FIELD_WIDTH / (WIDTH_TD_IMG - 2*BORDER) 
 
 def getHomographyMatrix():
-    img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread(PATH_TOP_DOWN_IMG)#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     
     # Define the 4 corner of the football field (target points), thereby the width will be kept and only the height adjusted
     # so we don't accidently lose to many information
     # [y,x]
-    #FIELD_HEIGHT = 70.0
-    #FIELD_WIDTH = 105.0
-    #ratio = FIELD_HEIGHT/FIELD_WIDTH
+    
     
     #newImg = np.zeros([ratio*img.shape[1], img.shape[1],3])
     target_pts = np.zeros([21,2])
@@ -108,7 +116,7 @@ def homography(target_pts, source_pts):
     return H / H[2][2]
 
 def evalMapping():
-    img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread(PATH_TOP_DOWN_IMG)
     H = getHomographyMatrix()
     
     # Define relevant points on the original field
@@ -159,7 +167,7 @@ def evalMapping():
     
 
 def test():
-    img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread(PATH_TOP_DOWN_IMG)#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     H = getHomographyMatrix()
     
     cap = cv2.VideoCapture('../videos/stitched_fixed.mpeg')
@@ -235,10 +243,10 @@ def test():
 # img: image to add the 
 def addPlayers(img, H, players):
     a = np.zeros([2])
-    i = 0
+    count = 0
     playersOnTheField = []
     for player in players:
-        i = i + 1
+        count = count + 1
         x = player[0][0]+player[0][2]/2.0
         y = player[0][1]+player[0][3]
         a = getTransformationCoords(H, [x,y])
@@ -253,9 +261,23 @@ def addPlayers(img, H, players):
             # If we reach that point the player was somewhere on the field
             playersOnTheField.append((player, (a[1],a[0])))
         except IndexError:
-            print 'Player '+str(i)+' out side the field!'
+            print 'Player '+str(count)+' out side the field!'
             
     return playersOnTheField, img
+
+'''
+    Function to calculate the distance in meters between two top down coordinates
+
+    Parameters:
+        pos1: position 1, np.array([x,y])
+        pos2: position 2, np.array([x,y])
+'''
+def distanceBetweenCoordsTopDown(pos1, pos2):
+    # Calculate distance between two vectors in PIXEL
+    distance = np.sqrt(np.sum(np.square(pos1-pos2)))
+        
+    return distance * PX_TO_M
+
 
 if __name__ == '__main__':
     test()
