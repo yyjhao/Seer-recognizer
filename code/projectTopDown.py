@@ -3,7 +3,10 @@ Provides methods to transform any point on the original field to a point on the 
 '''
 import cv2
 import numpy as np
+import copy
 from player_detector import getPlayers
+
+BORDER = 50
 
 def getHomographyMatrix():
     img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
@@ -16,47 +19,29 @@ def getHomographyMatrix():
     #ratio = FIELD_HEIGHT/FIELD_WIDTH
     
     #newImg = np.zeros([ratio*img.shape[1], img.shape[1],3])
-    border = 50
     target_pts = np.zeros([21,2])
-    '''
-    target_pts[0,:] = [border+69,border+295]
-    target_pts[1,:] = [border+69,border+505]
-    target_pts[2,:] = [border+190,border+170]
-    target_pts[3,:] = [border+190,border+630]
-    target_pts[4,:] = [border+230,border+400]
-    target_pts[5,:] = [border+494,border+400]
-    target_pts[6,:] = [border+706,border+400]
-    target_pts[7,:] = [border+970,border+400]
-    target_pts[8,:] = [border+1010,border+170]
-    target_pts[9,:] = [border+1010,border+630]
-    target_pts[10,:] = [border+1131,border+295]
-    target_pts[11,:] = [border+1131,border+505]
-    target_pts[12,:] = [border+1195,border+295]
-    target_pts[13,:] = [border+1195,border+505]
-    target_pts[14,:] = [border+5,border+295]
-    target_pts[15,:] = [border+5,border+505]
-    '''
-    target_pts[0,:] = [border+295,border+69]
-    target_pts[1,:] = [border+505,border+69]
-    target_pts[2,:] = [border+170,border+190]
-    target_pts[3,:] = [border+630,border+190]
-    target_pts[4,:] = [border+400,border+230]
-    target_pts[5,:] = [border+400,border+494]
-    target_pts[6,:] = [border+400,border+706]
-    target_pts[7,:] = [border+400,border+970]
-    target_pts[8,:] = [border+170,border+1010]
-    target_pts[9,:] = [border+630,border+1010]
-    target_pts[10,:] = [border+295,border+1131]
-    target_pts[11,:] = [border+505,border+1131]
-    target_pts[12,:] = [border+295,border+1195]
-    target_pts[13,:] = [border+505,border+1195]
-    target_pts[14,:] = [border+295,border+5]
-    target_pts[15,:] = [border+505,border+5]
+    # y,x
+    target_pts[0,:] = [BORDER+295,BORDER+69]
+    target_pts[1,:] = [BORDER+505,BORDER+69]
+    target_pts[2,:] = [BORDER+170,BORDER+190]
+    target_pts[3,:] = [BORDER+630,BORDER+190]
+    target_pts[4,:] = [BORDER+400,BORDER+230]
+    target_pts[5,:] = [BORDER+400,BORDER+494]
+    target_pts[6,:] = [BORDER+400,BORDER+706]
+    target_pts[7,:] = [BORDER+400,BORDER+970]
+    target_pts[8,:] = [BORDER+170,BORDER+1010]
+    target_pts[9,:] = [BORDER+630,BORDER+1010]
+    target_pts[10,:] = [BORDER+295,BORDER+1131]
+    target_pts[11,:] = [BORDER+505,BORDER+1131]
+    target_pts[12,:] = [BORDER+295,BORDER+1195]
+    target_pts[13,:] = [BORDER+505,BORDER+1195]
+    target_pts[14,:] = [BORDER+295,BORDER+5]
+    target_pts[15,:] = [BORDER+505,BORDER+5]
     ## Corners and center
-    target_pts[16,:] = [border,border]                     # Top left (image is orientated to the top left)
-    target_pts[17,:] = [border, img.shape[1]-1-border]        # Top right
-    target_pts[18,:] = [ img.shape[0]-1-border, img.shape[1]-1-border]     # Bottom right
-    target_pts[19,:] = [img.shape[0]-1-border, border]     # Bottom left
+    target_pts[16,:] = [BORDER,BORDER]                     # Top left (image is orientated to the top left)
+    target_pts[17,:] = [BORDER, img.shape[1]-1-BORDER]        # Top right
+    target_pts[18,:] = [ img.shape[0]-1-BORDER, img.shape[1]-1-BORDER]     # Bottom right
+    target_pts[19,:] = [img.shape[0]-1-BORDER, BORDER]     # Bottom left
     target_pts[20,:] = [(img.shape[0])/2,img.shape[1]/2]     # Center points
     
     
@@ -101,6 +86,11 @@ def getTransformationCoords(H, point):
     tmp = tmp/tmp[2]
     return [int(tmp[0]), int(tmp[1])]
     
+def getInverseTransformationCoords(Hinv, x, y):
+    tmp = np.dot(Hinv,np.array([y,x,1]))
+    tmp = tmp/tmp[2];
+    return (int(tmp[0]), int(tmp[1]))
+        
 # I assume projPts=u_p,v_p, pts=u_c,v_c
 def homography(target_pts, source_pts):
     A = np.zeros([target_pts.shape[0]*2,9])
@@ -169,33 +159,84 @@ def evalMapping():
     
 
 def test():
-    img = cv2.imread('../images/FootballField_small.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread('../images/FootballField_small_border.png')#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     H = getHomographyMatrix()
     
     cap = cv2.VideoCapture('../videos/stitched_fixed.mpeg')
     
     i = 0
-    while i < 20:
+    while i < 10:
         i = i + 1
         ret, frame = cap.read()
     
-    cv2.imwrite('frame20.jpg', frame)
+    
     players = getPlayers(frame)    
-    img = addPlayers(img, H, players)
+    playersOnTheField, img = addPlayers(img, H, players)
     
     cap.release()
     #a = np.array([318,344,1])
     #a = np.array([225,97,1])
-    cv2.imwrite('frame20_topDown.jpg', img)
-    cv2.imshow('new img', img)
+    cv2.imwrite('frame10_topDown.jpg', img)
+    #cv2.imshow('new img', img)
+    
+    # blue is on the right side
+    # red is on the left side (defined by user)
+    # Colors of players on the left and right side - goalies should have a slightly other color!
+    left = (0,0,255)
+    right = (255,0,0)
+    teamLeft_mostLeft = 9999999
+    teamLeft_mostRight = -1
+    teamRight_mostLeft = 9999999
+    teamRight_mostRight = -1
+    
+    for player in playersOnTheField:
+        if player[0][1] == left:
+            if player[1][0] < teamLeft_mostLeft:
+                teamLeft_mostLeft = player[1][0]
+            if player[1][0] > teamLeft_mostRight:
+                teamLeft_mostRight = player[1][0]
+        elif player[0][1] == right:
+            if player[1][0] < teamRight_mostLeft:
+                teamRight_mostLeft = player[1][0]
+            if player[1][0] > teamRight_mostRight:
+                teamRight_mostRight = player[1][0]
+            
+    if teamRight_mostLeft < teamLeft_mostLeft:
+        print "offside!!!"
+    if teamLeft_mostRight > teamRight_mostRight:
+        print "offside!!!"
+    
+    # Draw offside line on both sides if the last player of each team is in his half
+    if teamRight_mostRight > img.shape[1]/2:
+        # Draw line
+        Hinv = np.linalg.inv(H)
+        topPt = getInverseTransformationCoords(Hinv,teamRight_mostRight,BORDER)
+        bottomPt = getInverseTransformationCoords(Hinv,teamRight_mostRight,img.shape[0]-BORDER)
+
+        frameWithLine = copy.copy(frame) 
+        cv2.line(frameWithLine, topPt, bottomPt,(0,0,255),10)
+        frame = cv2.addWeighted(frame,0.8,frameWithLine,0.2,0)
+
+    if teamLeft_mostLeft < img.shape[1]/2:
+        # Draw line
+        Hinv = np.linalg.inv(H)
+        topPt = getInverseTransformationCoords(Hinv,teamLeft_mostLeft,BORDER)
+        bottomPt = getInverseTransformationCoords(Hinv,teamLeft_mostLeft,img.shape[0]-BORDER)
+        frameWithLine = copy.copy(frame) 
+        # Draw a solid line on the copy
+        cv2.line(frameWithLine, topPt, bottomPt,(0,0,255),10)
+        # Blend both image to make the line transparent on the frame
+        frame = cv2.addWeighted(frame,0.8,frameWithLine,0.2,0)
+    
+    cv2.imwrite('frame10.jpg', frame)
     cv2.waitKey(0)
 
 # Add all players in the given players list to the field
 # img: image to add the 
-#
 def addPlayers(img, H, players):
     a = np.zeros([2])
     i = 0
+    playersOnTheField = []
     for player in players:
         i = i + 1
         x = player[0][0]+player[0][2]/2.0
@@ -209,11 +250,13 @@ def addPlayers(img, H, players):
                         img[int(a[0]+i),int(a[1]-j)] = player[1]
                         img[int(a[0]-i),int(a[1]+j)] = player[1]
                         img[int(a[0]-i),int(a[1]-j)] = player[1]
+            # If we reach that point the player was somewhere on the field
+            playersOnTheField.append((player, (a[1],a[0])))
         except IndexError:
             print 'Player '+str(i)+' out side the field!'
             
-    return img
+    return playersOnTheField, img
 
 if __name__ == '__main__':
-    #test()
-    evalMapping()
+    test()
+    #evalMapping()
