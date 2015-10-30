@@ -28,7 +28,7 @@ def getHomographyMatrix():
     
     #newImg = np.zeros([ratio*img.shape[1], img.shape[1],3])
     target_pts = np.zeros([21,2])
-    # y,x
+    # y,x (row, col)
     target_pts[0,:] = [BORDER+295,BORDER+69]
     target_pts[1,:] = [BORDER+505,BORDER+69]
     target_pts[2,:] = [BORDER+170,BORDER+190]
@@ -54,32 +54,32 @@ def getHomographyMatrix():
     
     
     
-    ## Points on the image
+    ## Points on the image (row, col) == (y,x)
     pts = np.zeros([21,2])
     ## Special points on the image
-    pts[0,:] = [2785,355] #a
-    pts[1,:] = [2279, 504]
-    pts[2,:] = [3305, 297]
-    pts[3,:] = [2380, 656]
-    pts[4,:] = [3151, 407]
-    pts[5,:] = [3955, 399]
-    pts[6,:] = [4580, 399]
-    pts[7,:] = [5386, 397]
-    pts[8,:] = [5152, 280]
-    pts[9,:] = [6174, 624]
-    pts[10,:] = [5645, 329]
-    pts[11,:] = [6182, 468]
-    pts[12,:] = [5802, 327]
-    pts[13,:] = [6405, 467]
-    pts[14,:] = [2613, 355]
-    pts[15,:] = [2037, 508] #p
-    
+    pts[0,:] = [300,2370] # A (in the white)
+    pts[1,:] = [443,1929] # B (in the white)
+    pts[2,:] = [245,2817] # C (in the white)
+    pts[3,:] = [591,2000] # D (in the white)
+    pts[4,:] = [358,2664] # E (in the white)
+    pts[5,:] = [359,3454] # F (in the white)
+    pts[6,:] = [355,4083] # G (in the white)
+    pts[7,:] = [340,4880] # H (in the white)
+    pts[8,:] = [231,4678] # I (in the white)
+    pts[9,:] = [576,5705] # J (in the white)
+    pts[10,:] = [280,5176] # K (in the white)
+    pts[11,:] = [421,5722] # L (in the white)
+    pts[12,:] = [279,5341] # M (in the white)
+    pts[13,:] = [420,5948] # N (in the white)
+    pts[14,:] = [301,2219] # O (in the white)
+    pts[15,:] = [445,1721] # P (in the white)
+        
     ## Corners and center
-    pts[16,:] = [3042,247] # x, y
-    pts[17,:] = [5360, 227]
-    pts[18,:] = [8680, 999] # Bottom right (outside of the image)
-    pts[19,:] = [50, 1042]
-    pts[20,:] = [4267, 400] # Center
+    pts[16,:] = [196,2593] # Top left (outer coord)
+    pts[17,:] = [177,4892] # Top right (outer coord)
+    pts[18,:] = [950,8206] # Bottom right (outer coord)
+    pts[19,:] = [942,40] # Bottom left (outer coord)
+    pts[20,:] = [350,3767] # Center
     
     
     
@@ -94,8 +94,8 @@ def getTransformationCoords(H, point):
     tmp = tmp/tmp[2]
     return [int(tmp[0]), int(tmp[1])]
     
-def getInverseTransformationCoords(Hinv, x, y):
-    tmp = np.dot(Hinv,np.array([y,x,1]))
+def getInverseTransformationCoords(Hinv, row, col):
+    tmp = np.dot(Hinv,np.array([row,col,1]))
     tmp = tmp/tmp[2];
     return (int(tmp[0]), int(tmp[1]))
         
@@ -119,31 +119,32 @@ def evalMapping():
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     H = getHomographyMatrix()
     
-    # Define relevant points on the original field
+    ## Points on the image (row, col) == (y,x)
     pts = np.zeros([21,2])
-    pts[0,:] = [2785,355]
-    pts[1,:] = [2279, 504]
-    pts[2,:] = [3305, 297]
-    pts[3,:] = [2380, 656]
-    pts[4,:] = [3151, 407]
-    pts[5,:] = [3955, 399]
-    pts[6,:] = [4580, 399]
-    pts[7,:] = [5386, 397]
-    pts[8,:] = [5152, 280]
-    pts[9,:] = [6174, 624]
-    pts[10,:] = [5645, 329]
-    pts[11,:] = [6182, 468]
-    pts[12,:] = [5802, 327]
-    pts[13,:] = [6405, 467]
-    pts[14,:] = [2613, 355]
-    pts[15,:] = [2037, 508]
-    
-    # Corners and center
-    pts[16,:] = [3042,246] # x, y
-    pts[17,:] = [5360, 227]
-    pts[18,:] = [8680, 999] # Bottom right (outside of the image)
-    pts[19,:] = [52, 1042]
-    pts[20,:] = [4267, 400] # Center
+    ## Special points on the image
+    pts[0,:] = [300,2370] # A (in the white)
+    pts[1,:] = [443,1929] # B (in the white)
+    pts[2,:] = [245,2817] # C (in the white)
+    pts[3,:] = [591,2000] # D (in the white)
+    pts[4,:] = [358,2664] # E (in the white)
+    pts[5,:] = [359,3454] # F (in the white)
+    pts[6,:] = [355,4083] # G (in the white)
+    pts[7,:] = [340,4880] # H (in the white)
+    pts[8,:] = [231,4678] # I (in the white)
+    pts[9,:] = [576,5705] # J (in the white)
+    pts[10,:] = [280,5176] # K (in the white)
+    pts[11,:] = [421,5722] # L (in the white)
+    pts[12,:] = [279,5341] # M (in the white)
+    pts[13,:] = [420,5948] # N (in the white)
+    pts[14,:] = [301,2219] # O (in the white)
+    pts[15,:] = [445,1721] # P (in the white)
+        
+    ## Corners and center
+    pts[16,:] = [196,2593] # Top left (outer coord)
+    pts[17,:] = [177,4892] # Top right (outer coord)
+    pts[18,:] = [950,8206] # Bottom right (outer coord)
+    pts[19,:] = [942,40] # Bottom left (outer coord)
+    pts[20,:] = [350,3767] # Center
     
     a = np.zeros([2])
     i = 0
@@ -161,8 +162,8 @@ def evalMapping():
         except IndexError:
             print 'Player '+str(i)+' out side the field!'
     
-    cv2.imwrite('EvalField.jpg', img)        
-    cv2.imshow('new img', img)
+    cv2.imwrite('EvalField1.jpg', img)        
+    #cv2.imshow('new img', img)
     cv2.waitKey(0)
     
 
@@ -170,10 +171,10 @@ def test():
     img = cv2.imread(PATH_TOP_DOWN_IMG)#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     H = getHomographyMatrix()
     
-    cap = cv2.VideoCapture('../videos/stitched_fixed.mpeg')
+    cap = cv2.VideoCapture('test.mjpg')
     
     i = 0
-    while i < 10:
+    while i < 1:
         i = i + 1
         ret, frame = cap.read()
     
@@ -184,7 +185,7 @@ def test():
     cap.release()
     #a = np.array([318,344,1])
     #a = np.array([225,97,1])
-    cv2.imwrite('frame10_topDown.jpg', img)
+    cv2.imwrite('frame_topDown.jpg', img)
     #cv2.imshow('new img', img)
     
     # blue is on the right side
@@ -198,16 +199,16 @@ def test():
     teamRight_mostRight = -1
     
     for player in playersOnTheField:
-        if player[0][1] == left:
-            if player[1][0] < teamLeft_mostLeft:
-                teamLeft_mostLeft = player[1][0]
-            if player[1][0] > teamLeft_mostRight:
-                teamLeft_mostRight = player[1][0]
-        elif player[0][1] == right:
-            if player[1][0] < teamRight_mostLeft:
-                teamRight_mostLeft = player[1][0]
-            if player[1][0] > teamRight_mostRight:
-                teamRight_mostRight = player[1][0]
+        if player[0,1] == left:
+            if player[1,1] < teamLeft_mostLeft:
+                teamLeft_mostLeft = player[1,1]
+            if player[1,1] > teamLeft_mostRight:
+                teamLeft_mostRight = player[1,1]
+        elif player[0,1] == right:
+            if player[1,1] < teamRight_mostLeft:
+                teamRight_mostLeft = player[1,1]
+            if player[1,1] > teamRight_mostRight:
+                teamRight_mostRight = player[1,1]
             
     if teamRight_mostLeft < teamLeft_mostLeft:
         print "offside!!!"
@@ -218,8 +219,8 @@ def test():
     if teamRight_mostRight > img.shape[1]/2:
         # Draw line
         Hinv = np.linalg.inv(H)
-        topPt = getInverseTransformationCoords(Hinv,teamRight_mostRight,BORDER)
-        bottomPt = getInverseTransformationCoords(Hinv,teamRight_mostRight,img.shape[0]-BORDER)
+        topPt = getInverseTransformationCoords(Hinv,BORDER,teamRight_mostRight)
+        bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamRight_mostRight)
 
         frameWithLine = copy.copy(frame) 
         cv2.line(frameWithLine, topPt, bottomPt,(0,0,255),10)
@@ -228,15 +229,15 @@ def test():
     if teamLeft_mostLeft < img.shape[1]/2:
         # Draw line
         Hinv = np.linalg.inv(H)
-        topPt = getInverseTransformationCoords(Hinv,teamLeft_mostLeft,BORDER)
-        bottomPt = getInverseTransformationCoords(Hinv,teamLeft_mostLeft,img.shape[0]-BORDER)
+        topPt = getInverseTransformationCoords(Hinv,BORDER,teamLeft_mostLeft)
+        bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamLeft_mostLeft)
         frameWithLine = copy.copy(frame) 
         # Draw a solid line on the copy
         cv2.line(frameWithLine, topPt, bottomPt,(0,0,255),10)
         # Blend both image to make the line transparent on the frame
         frame = cv2.addWeighted(frame,0.8,frameWithLine,0.2,0)
     
-    cv2.imwrite('frame10.jpg', frame)
+    cv2.imwrite('frame_w_line.jpg', frame)
     cv2.waitKey(0)
 
 # Add all players in the given players list to the field
@@ -247,9 +248,9 @@ def addPlayers(img, H, players):
     playersOnTheField = []
     for player in players:
         count = count + 1
-        x = player[0][0]+player[0][2]/2.0
-        y = player[0][1]+player[0][3]
-        a = getTransformationCoords(H, [x,y])
+        row = player[0][1]+player[0][3]
+        col = player[0][0]+player[0][2]/2.0
+        a = getTransformationCoords(H, [row,col])
         try:
             for i in xrange(5):
                 for j in xrange(5):
@@ -259,7 +260,7 @@ def addPlayers(img, H, players):
                         img[int(a[0]-i),int(a[1]+j)] = player[1]
                         img[int(a[0]-i),int(a[1]-j)] = player[1]
             # If we reach that point the player was somewhere on the field
-            playersOnTheField.append((player, (a[1],a[0])))
+            playersOnTheField.append((player, (a[0],a[1])))
         except IndexError:
             print 'Player '+str(count)+' out side the field!'
             
@@ -280,5 +281,13 @@ def distanceBetweenCoordsTopDown(pos1, pos2):
 
 
 if __name__ == '__main__':
+    '''
+    img = cv2.imread('../images/eh.png')
+    fourcc = cv2.cv.CV_FOURCC(*"MJPG")
+    output = cv2.VideoWriter('test.mjpg', fourcc, 23, (img.shape[1], img.shape[0]))
+    output.write(img)
+    
+    output.release()
+    '''
     test()
     #evalMapping()
