@@ -166,15 +166,40 @@ def evalMapping():
     #cv2.imshow('new img', img)
     cv2.waitKey(0)
     
+def createTopDownVideo():
+    img = cv2.imread(PATH_TOP_DOWN_IMG)#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    H = getHomographyMatrix()
+    
+    cap = cv2.VideoCapture('../videos/stitched.mpeg')
 
+    fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+    movie_shape = (img.shape[1], img.shape[0])
+    
+    fourcc = cv2.cv.CV_FOURCC(*"MPEG")
+    output = cv2.VideoWriter('./topDown.mpeg', fourcc, fps, movie_shape)
+    
+    for count in xrange(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
+        newImg = copy.copy(img)
+        print "frame", count
+        
+        ret, frame = cap.read()
+        players = getPlayers(frame)    
+        _, newImg = addPlayers(newImg, H, players)
+        output.write(newImg)
+        if count > 69:
+            break
+        
+    cap.release()
+    output.release()
+    
 def test():
     img = cv2.imread(PATH_TOP_DOWN_IMG)#, cv2.CV_LOAD_IMAGE_GRAYSCALE)
     H = getHomographyMatrix()
     
-    cap = cv2.VideoCapture('test.mjpg')
+    cap = cv2.VideoCapture('../videos/stitched.mpeg')
     
     i = 0
-    while i < 1:
+    while i < 20:
         i = i + 1
         ret, frame = cap.read()
     
@@ -199,16 +224,16 @@ def test():
     teamRight_mostRight = -1
     
     for player in playersOnTheField:
-        if player[0,1] == left:
-            if player[1,1] < teamLeft_mostLeft:
-                teamLeft_mostLeft = player[1,1]
-            if player[1,1] > teamLeft_mostRight:
-                teamLeft_mostRight = player[1,1]
-        elif player[0,1] == right:
-            if player[1,1] < teamRight_mostLeft:
-                teamRight_mostLeft = player[1,1]
-            if player[1,1] > teamRight_mostRight:
-                teamRight_mostRight = player[1,1]
+        if player[0][1] == left:
+            if player[1][1] < teamLeft_mostLeft:
+                teamLeft_mostLeft = player[1][1]
+            if player[1][1] > teamLeft_mostRight:
+                teamLeft_mostRight = player[1][1]
+        elif player[0][1] == right:
+            if player[1][1] < teamRight_mostLeft:
+                teamRight_mostLeft = player[1][1]
+            if player[1][1] > teamRight_mostRight:
+                teamRight_mostRight = player[1][1]
             
     if teamRight_mostLeft < teamLeft_mostLeft:
         print "offside!!!"
@@ -223,7 +248,7 @@ def test():
         bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamRight_mostRight)
 
         frameWithLine = copy.copy(frame) 
-        cv2.line(frameWithLine, topPt, bottomPt,(0,0,255),10)
+        cv2.line(frameWithLine, (topPt[1],topPt[0]), (bottomPt[1],bottomPt[0]),(0,0,255),10)
         frame = cv2.addWeighted(frame,0.8,frameWithLine,0.2,0)
 
     if teamLeft_mostLeft < img.shape[1]/2:
@@ -233,10 +258,10 @@ def test():
         bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamLeft_mostLeft)
         frameWithLine = copy.copy(frame) 
         # Draw a solid line on the copy
-        cv2.line(frameWithLine, topPt, bottomPt,(0,0,255),10)
+        cv2.line(frameWithLine, (topPt[1],topPt[0]), (bottomPt[1],bottomPt[0]),(0,0,255),10)
         # Blend both image to make the line transparent on the frame
         frame = cv2.addWeighted(frame,0.8,frameWithLine,0.2,0)
-    
+
     cv2.imwrite('frame_w_line.jpg', frame)
     cv2.waitKey(0)
 
@@ -281,13 +306,6 @@ def distanceBetweenCoordsTopDown(pos1, pos2):
 
 
 if __name__ == '__main__':
-    '''
-    img = cv2.imread('../images/eh.png')
-    fourcc = cv2.cv.CV_FOURCC(*"MJPG")
-    output = cv2.VideoWriter('test.mjpg', fourcc, 23, (img.shape[1], img.shape[0]))
-    output.write(img)
-    
-    output.release()
-    '''
-    test()
+    createTopDownVideo()
+    #test()
     #evalMapping()
