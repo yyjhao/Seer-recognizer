@@ -1,8 +1,50 @@
 import numpy as np
 import cv2
+import util
+from scipy import stats
 
 # Read background image
-BACKGROUND_IMG = cv2.imread('../images/stitched_background.jpg')
+BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
+
+BLUE  = (255, 0, 0)
+GREEN = (0, 255, 0)
+RED   = (0, 0, 255)
+
+# Linear scaled threshold value
+# 0-1029 -> 13-52
+def threshVal(row):
+  return float(row) / 1029 * 38 + 13
+
+# Linear scaled area filter
+# 0-1029 -> 0-2300
+def areaVal(row):
+  return float(row) / 1029 * 2300
+
+# Generates a mask of the field
+def fieldMask(frame):
+  ## Corners and center
+  pts = np.zeros([4,2], dtype=np.int) 
+  pts[0,:] = [189, 2556] # Top left
+  pts[1,:] = [168, 4918] # Top right
+  pts[2,:] = [960, 8119] # Bottom right (outside of the image)
+  pts[3,:] = [972, 0] # Bottom left
+  
+  mask = util.quadrangleMask(pts, frame.shape)
+  
+  return mask
+
+FIELD_MASK = fieldMask(BACKGROUND_IMG[:,:,0])
+
+# Filter out contours that:
+#   1. Are too small
+#   2. Have a wide aspect ratio
+#   3. Are outside the field boundary
+def contourFilter(contour_bound):
+  x, y, w, h = contour_bound[1]
+  check = w * h > areaVal(y + h) \
+          and float(w) / h < 1.2 \
+          and FIELD_MASK[y + h, x + w / 2] != 0
+  return check
 
 # Detects all players in the frame, returning a list of tuples containing the
 # bounding rectangle and color of each player of the form ((x, y, w, h), color)
@@ -21,22 +63,24 @@ def getPlayers(frame):
 
   # Normalize the Delta E difference to a value between 0-255
   delta_E = delta_E / delta_E.max() * 255
-  delta_E = delta_E.astype('uint8')
 
   # Threshold the Delta E difference so all values greater than the thresh_val
   # are set to 255 (foreground), and all values lower are set to 0 (background).
   # This creates a binary image used for contour detection.
-  thresh_val = 28
-  r, binary_frame = cv2.threshold(delta_E, thresh_val, 255, cv2.THRESH_BINARY)
+  # Use variable thresholding based on the row coordinate of the image.
+  thresh_vals = np.zeros(delta_E.shape)
+  for row in range(thresh_vals.shape[0]):
+    thresh_vals[row,:] = threshVal(row)
+  binary_frame = np.zeros(delta_E.shape, 'uint8')
+  binary_frame[delta_E > thresh_vals] = 255
 
   # Find all outer contours in the binary image
   contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
                                  cv2.CHAIN_APPROX_SIMPLE)
 
-  # Filter out contours that are too small or have a wide aspect ratio.
-  # The list also includes each contour's bounding rectangle.
-  contour_bounds = [(c, cv2.boundingRect(c)) for c in contours if cv2.contourArea(c) > 100]
-  contour_bounds = [cb for cb in contour_bounds if float(cb[1][2]) / cb[1][3] < 1]
+  # Filter out contours that are not players on the field
+  contour_bounds = [(c, cv2.boundingRect(c)) for c in contours]
+  contour_bounds = filter(contourFilter, contour_bounds)
 
   players = []
 
@@ -45,20 +89,33 @@ def getPlayers(frame):
     bounding_rect = cb[1]
 
     # Create a mask where the contour interiors are set to 255,
-    # and all other values are 0
+    # and all other values are 0. Use the mask to grab all hue
+    # values within the contour.
     mask = np.zeros(binary_frame.shape).astype('uint8')
     cv2.drawContours(mask, [contour], 0, 255, -1)
+    hues = frame_hue[np.nonzero(mask)]
 
-    # Calculate the average hue of all the pixels within the contour
-    avg_hue = cv2.mean(frame_hue, mask=mask)[0]
+    # Calculate statistics for hue of all the pixels within the contour
+    mean_hue = np.mean(hues)
+    median_hue = np.median(hues)
+    mode_hue = stats.mode(hues.flatten())[0][0]
 
-    # Determine the player color based on the average hue
-    if avg_hue > 60:
-      color = (255, 0, 0)
-    elif avg_hue > 30:
-      color = (0, 255, 0)
+    # Determine the player color based on hue statistics and position
+    if max(median_hue, mode_hue, mean_hue) > 60:
+      # blue player
+      color = BLUE
+    elif min(median_hue, mode_hue, mean_hue) < 30:
+      # red player
+      color = RED
+    elif bounding_rect[0] > 5000:
+      # blue goalie
+      color = BLUE
+    elif bounding_rect[0] < 3000:
+      # red goalie
+      color = RED
     else:
-      color = (0, 0, 255)
+      # referee
+      color = GREEN
 
     # Append the player bounding rectangle and color to the list
     player = (bounding_rect, color)
@@ -68,14 +125,14 @@ def getPlayers(frame):
 
 # Runs player detection on each frame of the stitched football video.
 # Each player detected frame is then saved upon stepping through the frames.
+# NOTE: Frames are read from a folder of PNG files instead of the MPEG
+# video in order to combat lossy video compression
 def main():
-  # Open video file
-  cap = cv2.VideoCapture('../videos/stitched_fixed.mpeg')
-  frame_count = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))
+  frame_count = 7200
 
   # Read each frame
   for k in range(frame_count):
-    _, frame = cap.read()
+    frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
 
     # Detect players in frame
     players = getPlayers(frame)
@@ -88,11 +145,10 @@ def main():
 
     # Show and save the player detected frame
     cv2.imshow('Player detection', detection_frame)
-    cv2.imwrite('../images/player_detection/frame_{}.jpg'.format(k), detection_frame)
+    cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
     cv2.waitKey(0)
 
   cv2.destroyAllWindows()
-  cap.release()
 
 if __name__ == "__main__":
   main()

@@ -1,6 +1,7 @@
 *.pyc
 videos/
 images/player_detection/
+images/stitched_frames/
 
 # Ignore temp output in the code folder
 code/*.jpg
