@@ -1,3 +1,9 @@
 *.pyc
 videos/
 images/player_detection/
+
+# Ignore temp output in the code folder
+code/*.jpg
+code/*.png
+code/*.mpeg
+code/*.mp4
