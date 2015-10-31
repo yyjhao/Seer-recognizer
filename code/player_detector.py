@@ -6,9 +6,10 @@ from scipy import stats
 # Read background image
 BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
 
-BLUE  = (255, 0, 0)
-GREEN = (0, 255, 0)
-RED   = (0, 0, 255)
+class Color(object):
+  BLUE  = (255, 0, 0)
+  GREEN = (0, 255, 0)
+  RED   = (0, 0, 255)
 
 # Linear scaled threshold value
 # 0-1029 -> 13-52
@@ -103,19 +104,19 @@ def getPlayers(frame):
     # Determine the player color based on hue statistics and position
     if max(median_hue, mode_hue, mean_hue) > 60:
       # blue player
-      color = BLUE
+      color = Color.BLUE
     elif min(median_hue, mode_hue, mean_hue) < 30:
       # red player
-      color = RED
+      color = Color.RED
     elif bounding_rect[0] > 5000:
       # blue goalie
-      color = BLUE
+      color = Color.BLUE
     elif bounding_rect[0] < 3000:
       # red goalie
-      color = RED
+      color = Color.RED
     else:
       # referee
-      color = GREEN
+      color = Color.GREEN
 
     # Append the player bounding rectangle and color to the list
     player = (bounding_rect, color)
@@ -144,8 +145,8 @@ def main():
       cv2.rectangle(detection_frame, (x,y), (x+w,y+h), color, 1)
 
     # Show and save the player detected frame
-    cv2.imshow('Player detection', detection_frame)
     cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
+    cv2.imshow("Player detection", detection_frame)
     cv2.waitKey(0)
 
   cv2.destroyAllWindows()
