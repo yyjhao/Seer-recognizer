@@ -9,31 +9,63 @@ BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
 BLUE  = (255, 0, 0)
 GREEN = (0, 255, 0)
 RED   = (0, 0, 255)
+BLUE_GOALIE = (255, 50, 50)
+RED_GOALIE  = (50, 50, 255)
 
-# Linear scaled threshold value
-# 0-1029 -> 13-52
+# Several linear scaled threshold values based on row
 def threshVal(row):
-  return float(row) / 1029 * 38 + 13
+  if row < 190:
+    return 50
+  elif row < 470:
+    # 0-1029 -> 15-59
+    return float(row) / 1029 * 44 + 15
+  elif row < 740:
+    # 0-1029 -> 24-65
+    return float(row) / 1029 * 41 + 24
+  # 0-1029 -> 17-60
+  return float(row) / 1029 * 43 + 17
 
-# Linear scaled area filter
-# 0-1029 -> 0-2300
+# Several linear scaled area filters based on row
 def areaVal(row):
-  return float(row) / 1029 * 2300
+  if row < 260:
+    # 0-1029 -> 0-1200
+    return float(row) / 1029 * 1200
+  if row < 470:
+    # 0-1029 -> 0-1700
+    return float(row) / 1029 * 1700
+  elif row < 740:
+    # 0-1029 -> 0-2200
+    return float(row) / 1029 * 2200
+  # 0-1029 -> 0-4300
+  return float(row) / 1029 * 4300
 
-# Generates a mask of the field
-def fieldMask(frame):
-  ## Corners and center
+# Generates a mask where the area inside the polygon
+# specified by the 4 pts is set to 1, and everything
+# else is set to 0
+def generateMask(pt0, pt1, pt2, pt3):
   pts = np.zeros([4,2], dtype=np.int) 
-  pts[0,:] = [189, 2556] # Top left
-  pts[1,:] = [168, 4918] # Top right
-  pts[2,:] = [960, 8119] # Bottom right (outside of the image)
-  pts[3,:] = [972, 0] # Bottom left
+  pts[0,:] = pt0 # Top left
+  pts[1,:] = pt1 # Top right
+  pts[2,:] = pt2 # Bottom right
+  pts[3,:] = pt3 # Bottom left
   
-  mask = util.quadrangleMask(pts, frame.shape)
+  mask = util.quadrangleMask(pts, BACKGROUND_IMG[:,:,0].shape)
   
   return mask
 
-FIELD_MASK = fieldMask(BACKGROUND_IMG[:,:,0])
+# Area of the field players are standing in
+FIELD_MASK = generateMask(
+  [190, 2520],
+  [166, 4990],
+  [990, 8700],
+  [1000, -470])
+
+# CUZ THE BLUE GOALIE IS A NINJA
+BLUE_GOALIE_MASK = generateMask(
+  [267, 5364],
+  [267, 5700],
+  [400, 5700],
+  [400, 5364]).astype('bool')
 
 # Filter out contours that:
 #   1. Are too small
@@ -42,7 +74,7 @@ FIELD_MASK = fieldMask(BACKGROUND_IMG[:,:,0])
 def contourFilter(contour_bound):
   x, y, w, h = contour_bound[1]
   check = w * h > areaVal(y + h) \
-          and float(w) / h < 1.2 \
+          and float(w) / h < 2.4 \
           and FIELD_MASK[y + h, x + w / 2] != 0
   return check
 
@@ -71,6 +103,7 @@ def getPlayers(frame):
   thresh_vals = np.zeros(delta_E.shape)
   for row in range(thresh_vals.shape[0]):
     thresh_vals[row,:] = threshVal(row)
+  thresh_vals[BLUE_GOALIE_MASK] = 21
   binary_frame = np.zeros(delta_E.shape, 'uint8')
   binary_frame[delta_E > thresh_vals] = 255
 
@@ -98,28 +131,29 @@ def getPlayers(frame):
     # Calculate statistics for hue of all the pixels within the contour
     mean_hue = np.mean(hues)
     median_hue = np.median(hues)
-    mode_hue = stats.mode(hues.flatten())[0][0]
+    mode_hue = stats.mode(hues, axis=None)[0][0]
 
     # Determine the player color based on hue statistics and position
     if max(median_hue, mode_hue, mean_hue) > 60:
       # blue player
       color = BLUE
-    elif min(median_hue, mode_hue, mean_hue) < 30:
+    elif min(median_hue, mode_hue, mean_hue) < 15:
       # red player
       color = RED
-    elif bounding_rect[0] > 5000:
+    elif bounding_rect[0] > 5000 and bounding_rect[1] < 800:
       # blue goalie
-      color = BLUE
+      color = BLUE_GOALIE
     elif bounding_rect[0] < 3000:
       # red goalie
-      color = RED
+      color = RED_GOALIE
     else:
       # referee
       color = GREEN
 
     # Append the player bounding rectangle and color to the list
-    player = (bounding_rect, color)
-    players.append(player)
+    if color != GREEN or bounding_rect[1] < 800:
+      player = (bounding_rect, color, mean_hue, median_hue, mode_hue)
+      players.append(player)
 
   return players
 
@@ -144,11 +178,8 @@ def main():
       cv2.rectangle(detection_frame, (x,y), (x+w,y+h), color, 1)
 
     # Show and save the player detected frame
-    cv2.imshow('Player detection', detection_frame)
     cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
-    cv2.waitKey(0)
-
-  cv2.destroyAllWindows()
+    print "frame", k
 
 if __name__ == "__main__":
   main()
