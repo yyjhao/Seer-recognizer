@@ -6,11 +6,12 @@ from scipy import stats
 # Read background image
 BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
 
-BLUE  = (255, 0, 0)
-GREEN = (0, 255, 0)
-RED   = (0, 0, 255)
-BLUE_GOALIE = (255, 50, 50)
-RED_GOALIE  = (50, 50, 255)
+class Color(object):
+  BLUE  = (255, 0, 0)
+  GREEN = (0, 255, 0)
+  RED   = (0, 0, 255)
+  BLUE_GOALIE = (255, 50, 50)
+  RED_GOALIE  = (50, 50, 255)
 
 # Several linear scaled threshold values based on row
 def threshVal(row):
@@ -136,22 +137,22 @@ def getPlayers(frame):
     # Determine the player color based on hue statistics and position
     if max(median_hue, mode_hue, mean_hue) > 60:
       # blue player
-      color = BLUE
+      color = Color.BLUE
     elif min(median_hue, mode_hue, mean_hue) < 15:
       # red player
-      color = RED
+      color = Color.RED
     elif bounding_rect[0] > 5000 and bounding_rect[1] < 800:
       # blue goalie
-      color = BLUE_GOALIE
+      color = Color.BLUE_GOALIE
     elif bounding_rect[0] < 3000:
       # red goalie
-      color = RED_GOALIE
+      color = Color.RED_GOALIE
     else:
       # referee
-      color = GREEN
+      color = Color.GREEN
 
     # Append the player bounding rectangle and color to the list
-    if color != GREEN or bounding_rect[1] < 800:
+    if color != Color.GREEN or bounding_rect[1] < 800:
       player = (bounding_rect, color, mean_hue, median_hue, mode_hue)
       players.append(player)
 
@@ -180,6 +181,10 @@ def main():
     # Show and save the player detected frame
     cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
     print "frame", k
+    cv2.imshow("Player detection", detection_frame)
+    cv2.waitKey(0)
+
+  cv2.destroyAllWindows()
 
 if __name__ == "__main__":
   main()

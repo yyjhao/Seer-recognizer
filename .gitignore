@@ -1,7 +1,9 @@
 *.pyc
 videos/
-images/player_detection/
-images/stitched_frames/
+images/player_detection/*
+images/stitched_frames/*
+images/player_tracking/*
+!images/player_tracking/.syncfolder
 
 # Ignore temp output in the code folder
 code/*.jpg
