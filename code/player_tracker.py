@@ -4,6 +4,17 @@
 # CS 4243, Computer Vision and Pattern Recognition, November 2015.
 # Xiayue (Charles) Lin, A0145415L
 
+# -- Task List --
+# IDEA: instead of arbitrary search radius, use the size of the last rectangle
+# (or minimum k). This will actually be necessary for detecting collision
+# resolution.
+# TODO: need to deal with resolution ambiguity in >2 player collisions. Need to
+# track expected position through the collision so when we see a resolution, we
+# know which player left.
+# IDEA: use position extrapolation to deal with large area collisions.
+# unnecessary to track the player to the collision if we are already
+# extrapolating his position for resolution anyway.
+
 import cv2
 import numpy as np
 
@@ -14,11 +25,16 @@ from player_detector import (
 
 def test():
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
+    NUM_SKIP = 2
+    for i in range(NUM_SKIP):
+        _, _ = cap.read()
+        _, _ = cap.read()
     _, frame = cap.read()
     players = getPlayers(frame)
     pt = PlayerTracker(players)
     i = 1
-    while i < 50:
+    NUM_FRAMES = 20
+    while i < NUM_FRAMES:
         _, frame = cap.read()
         rects = getPlayers(frame)
         pt.feed_rectangles(rects)
@@ -28,7 +44,7 @@ def test():
     del cap
 
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
-    for i in range(50):
+    for i in range(NUM_FRAMES):
         _, frame = cap.read()
         pno = 0
         print pt.players
@@ -71,6 +87,8 @@ class PlayerTracker(object):
             player.centroids.append(rect_centroid(player_data[0]))
             self.players.append(player)
             i += 1
+        # The list of ongoing (existed in last frame) collisions.
+        self.collisions = []
         # The last frame with tracked data.
         self.last_frame = 0
 
@@ -81,21 +99,41 @@ class PlayerTracker(object):
         team is the team of the detected rectangle (see enum class below).
         This function will associate the given player rectangles to
         the list of players.
-        XXX edge case: collision
-        XXX edge case: detection failures
+
+        Current implementation: We'll assume nothing on the number of
+        detections given; overdetections or underdetections can have.
+        Thus we won't try to solve this as a matching problem. Instead,
+        we'll use heuristics to detect collisions and detection drops,
+        individually for each player.
+        Collisions: when two players are tracked to the same detection.
+        Detection fails: when a player cannot be tracked to any nearby
+        detection.
+
+        Dealing with collisions:
+        A frame has a collision if multiple of its players are mapped
+        to the same centroid coordinate.
+        During frame processing, if the last frame had a collision,
+        we must do additional checks to see if the collision can be resolved
+        (otherwise the two players are stuck together forever).
+        Our current heuristic for this is to check for any unclaimed
+        detections `around` the collision (except the collision's new
+        position). If so, we `select` a player to remove from the collision
+        and associate with the new point instead.
+        By `around`, we mean near the size of the collision rectangle
+        (although tweak can).
+        By `select`, we mean heuristically; the player must be the same
+        colour, and if still ambiguous, it should be the player with the
+        closest expected position.
+        To facilitate all of this, during a collision, we must record the
+        player's expected position instead of his collision centroid,
+        and optionally, after a collision, retroactively update his
+        positions during the collision.
         """
-        # Idea: We'll assume nothing on the number of detections given;
-        # can have overdetections or underdetections.
-        # Thus we won't try to solve this as a matching problem. Instead,
-        # we'll use heuristics to detect collisions and detection drops,
-        # individually for each player.
-        # Collisions: when two players are tracked to the same detection.
-        # Detection fails: when a player cannot be tracked to any nearby
-        # detection.
 
         # Ideally, we'd use a data structure to hold processed data
         # and stats for each detection, but let's be lazy.
         # https://www.youtube.com/watch?v=Nn5K-NNmgTM
+        # The centroids of the detections.
         centroids = [rect_centroid(x[0]) for x in player_list]
         # The players that have claimed this detection as their
         # next location.
@@ -103,10 +141,17 @@ class PlayerTracker(object):
 
         # Map each player to some point in the detection data,
         # or handle detection failures appropriately.
+        # NB: Only do this for players not involved in a collision.
+        # For players currently in collisions, we will track/resolve
+        # them separately.
         for player in self.players:
+            if not all(
+                    player not in collision.players
+                    for collision in self.collisions):
+                continue
             last_frame_pos = player.centroids[self.last_frame]
             centroid_distances = [
-                euclidean_distance(last_frame_pos, x) 
+                euclidean_distance(last_frame_pos, x)
                 for x in centroids]
             # We define the next location of the player to be:
             # - The nearest detection centroid of the player's color,
@@ -115,7 +160,7 @@ class PlayerTracker(object):
             #   within the search radius. If none,
             # - Detection failed, and we extrapolate for the
             #   next search position.
-            # The following code implements this (although written in a 
+            # The following code implements this (although written in a
             # slightly different order).
             argmin = np.array(centroid_distances).argmin()
             if player_list[argmin][1] != player.color:
@@ -143,12 +188,155 @@ class PlayerTracker(object):
                 detections[argmin].append(player)
                 player.reset_search_radius()
 
-        # TODO: PROCESS COLLISIONS.
+        # -- Attempt to resolve collisions from the last frame. --
+        collision_index = 0
+        collisions_to_delete = []
+        for collision in self.collisions:
+            # Find where this collision is going.
+            last_frame_pos = collision.centroid
+            centroid_distances = [
+                euclidean_distance(last_frame_pos, x)
+                for x in centroids]
+            argmin = np.array(centroid_distances).argmin()
+
+            # See if we can resolve any players to nearby detections.
+            unclaimed_rectangles = [
+                player_list[i] if len(detections[i]) == 0 else None
+                for i in range(len(player_list))]
+            unclaimed_rectangles[argmin] = None
+            resolutions = collision.try_resolving(
+                unclaimed_rectangles, self.last_frame)
+            # Register trackings. We can definitely refactor this.
+            for index_centroid, index_player in resolutions:
+                centroid = centroids[index_centroid]
+                player = collision.players[index_player]
+                player.detection_rectangles.append(player_list[index_centroid][0])
+                player.centroids.append(centroids[index_centroid])
+                detections[index_centroid].append(player)
+                player.reset_search_radius()
+                # Also, remove this player from the collision.
+                del collision.players[index_player]
+                print "Removing player %r from a collision." % player.pid
+            assert len(collision.players) > 0, \
+                "Collision objects should always have a last player!"
+            # Remove this collision if it is fully resolved.
+            if len(collision.players) == 1:
+                print "Collision fully resolved."
+                player = collision.players[0]
+                player.detection_rectangles.append(player_list[argmin][0])
+                player.centroids.append(centroids[argmin])
+                detections[argmin].append(player)
+                player.reset_search_radius()
+                del collision.players[0]
+                collisions_to_delete.append(collision_index)
+            # Otherwise, reprocess the collisions for this frame.
+            else:
+                for player in collision.players:
+                    detections[argmin].append(player)
+
+        # All the collision data has been processed into resolutions or
+        # new collisions. We can now reset the collisions.
+        self.collisions = []
+
+        # Add all detections with multiple claims as collisions.
+        # TODO: Deal with new players joining a collision.
+        # XXX: Persist or redetect existing collisions? Redetect sounds easier
+        for i in range(len(detections)):
+            if len(detections[i]) > 1:
+                collision = Collision(detections[i], centroids[i], player_list[i][0])
+                self.collisions.append(collision)
+        # Track the expected position of players involved in collisions.
+        # If a player just got into a collision in this frame,
+        # they will have been tracked to the collision, and this code
+        # will wipe it out and replace it with an extrapolated position
+        # (as it should).
+        for collision in self.collisions:
+            for player in collision.players:
+                player.extrapolate_centroid(self.last_frame)
 
         self.last_frame += 1
 
 
+class Collision(object):
+    """ XXX: Represents a collision (in a given frame ???) """
+    def __init__(self, players, centroid, rectangle):
+        """ players: The list of Player objects involved in the collision.
+            centroid: The centroid of the collision.
+            rectangle: The rectangle of the collision.
+        """
+        self.players = players
+        self.centroid = centroid
+        self.rectangle = rectangle
+        print "Collision detected at %r. Players: %r" % (centroid, [p.pid for p in self.players])
 
+    def try_resolving(self, list_of_detections, last_frame):
+        """ Given a list of ((rectangle, color) or None),
+        figure out if any of the players in this collision could have
+        ended up at these detections.
+        Must always keep one player in this collision
+        (since the collision is tracked).
+        Returns a list of (index_centroid, index_player), where
+        index_centroid is the index of this centroid in the original
+        list_of_points, and index_player is the index of the matching player in
+        this collision.
+        """
+        search_radius = (self.rectangle[2] + self.rectangle[3])  # Arbitrary.
+        list_of_centroids = [
+            (rect_centroid(x[0]), x[1])
+            if x is not None else None
+            for x in list_of_detections
+        ]
+        list_of_resolutions = []
+        # {player index: (index of closest centroid, dist to centroid)}
+        list_of_candidates = {}
+        for i in range(len(self.players)):
+            player = self.players[i]
+            dist_to_centroids = [
+                euclidean_distance(player.centroids[last_frame], x[0])
+                if x is not None and player.color == x[1] else 999999
+                for x in list_of_centroids
+            ]
+            argmin = np.array(dist_to_centroids).argmin()
+            list_of_candidates[i] = (argmin, dist_to_centroids[argmin])
+        def candidate_argmin_val(list_of_candidates):
+            assert len(list_of_candidates) > 0, \
+                "Cannot argmin an empty dict."
+            items = [x for x in list_of_candidates.iteritems()]
+            argmin = 0
+            minval = items[0][1][1]
+            for x in items:
+                if x[1][1] < minval:
+                    argmin = x[0]
+            return list_of_candidates[argmin]
+        best_match_player = candidate_argmin_val(list_of_candidates)
+        if best_match_player[1] < search_radius:
+            list_of_resolutions.append((
+                best_match_player[1], best_match_player[0]))
+            list_of_centroids[best_match_player[0]] = None
+            del list_of_candidates[best_match_player]
+        else:
+            return []
+        while len(list_of_candidates) > 1:
+            for i, _ in list_of_candidates:
+                player = self.players[i]
+                dist_to_centroids = [
+                    euclidean_distance(player.centroids[last_frame], x[0])
+                    if x is not None and player.color == x[1] else 999999
+                    for x in list_of_centroids
+                ]
+                argmin = np.array(dist_to_centroids).argmin()
+                list_of_candidates[i] = (argmin, dist_to_centroids[argmin])
+            best_match_player = candidate_argmin_val(list_of_candidates)
+            if best_match_player[1] < search_radius:
+                list_of_resolutions.append((
+                    best_match_player[1], best_match_player[0]))
+                list_of_centroids[best_match_player[0]] = None
+                del list_of_candidates[best_match_player]
+            else:
+                break
+
+        if len(list_of_resolutions) == 1: return []
+        return list_of_resolutions
 
 class Player(object):
     """ Represents a player, their tracked position, and any player detection
@@ -164,12 +352,12 @@ class Player(object):
         # The player's team. as a Color.enum.
         self.color = None
 
-        # A list of the player's ground positions, on the raw video, 
+        # A list of the player's ground positions, on the raw video,
         # in frame order.
         # Position represented by a tuple (x, y) of ints.
         # This is what we really need tracking to produce. Applying homography
         # to get top-down coordinates is trivial.
-        # TODO: decide how to calculate these from raw position data. 
+        # TODO: decide how to calculate these from raw position data.
         # We probably don't have to do this on the fly.
         self.raw_positions = []
 
@@ -203,7 +391,7 @@ class Player(object):
         """Approximate the centroid point for the next frame."""
         # Currently, we'll do this by doing a flat average
         # of velocity data from the past [up to] five centroids
-        # (four velocities). 
+        # (four velocities).
         extrapolated_velocity = np.array((0, 0))
         samples = 0
         f2 = last_frame
@@ -243,7 +431,7 @@ def rect_centroid(rect):
 
 def euclidean_distance(p1, p2):
     """ Computes the Euclidean distance between two points
-    p1 = (x1, y1) and p2 = (x2, y2). 
+    p1 = (x1, y1) and p2 = (x2, y2).
     Returns a float >= 0.
     """
     return np.linalg.norm(np.array(p1) - np.array(p2))
