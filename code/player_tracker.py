@@ -28,10 +28,10 @@ def test():
     NUM_SKIP = 2
     for i in range(NUM_SKIP):
         _, _ = cap.read()
-        _, _ = cap.read()
     _, frame = cap.read()
     players = getPlayers(frame)
     pt = PlayerTracker(players)
+    print "Processed frame 0."
     i = 1
     NUM_FRAMES = 20
     while i < NUM_FRAMES:
@@ -44,23 +44,23 @@ def test():
     del cap
 
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
+    for i in range(NUM_SKIP):
+        _, _ = cap.read()
     for i in range(NUM_FRAMES):
         _, frame = cap.read()
-        pno = 0
-        print pt.players
+        print "Frame %r:" % i
         for player in pt.players:
             rect = player.detection_rectangles[i]
             if rect is not None:
                 loc = (rect[0] + rect[2] / 2, rect[1] + rect[3])
-                print loc
+                # print loc
                 cv2.circle(frame, loc, 5, player.color, -1)
-                cv2.putText(frame, str(pno), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
+                cv2.putText(frame, str(player.pid), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
             else:
                 loc = player.centroids[i]
-                print "%r (extrapolated)" % (loc,)
+                print "Player %r: %r (extrapolated)" % (player.pid, loc)
                 cv2.circle(frame, loc, 5, (255, 255, 255), -1)
-                cv2.putText(frame, str(pno), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
-            pno += 1
+                cv2.putText(frame, str(player.pid), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
         cv2.imwrite('../images/player_tracking/%s.png' % i, frame)
 
 
@@ -157,26 +157,27 @@ class PlayerTracker(object):
             # - The nearest detection centroid of the player's color,
             #   within the search radius. If none,
             # - The nearest detection centroid of any color,
-            #   within the search radius. If none,
+            #   within the COLLISION radius. If none,
             # - Detection failed, and we extrapolate for the
             #   next search position.
-            # The following code implements this (although written in a
-            # slightly different order).
-            argmin = np.array(centroid_distances).argmin()
-            if player_list[argmin][1] != player.color:
-                # Invalidate all distances to centroids of other colors.
-                for i in range(len(centroids)):
-                    if centroids[i][1] != player.color:
-                        centroid_distances[i] = 999999
-                # Now get the closest centroid -- of the player's color.
-                argmin_team = np.array(centroid_distances).argmin()
-                # If it's in the search radius, use it.
-                if centroid_distances[argmin_team] <= player.search_radius:
-                    argmin = argmin_team
-            if centroid_distances[argmin] > player.search_radius:
+            team_centroid_dists = centroid_distances[:]
+            for i in range(len(centroids)):
+                if player_list[i][1] != player.color:
+                    team_centroid_dists[i] = 999999
+
+            argmin = np.array(team_centroid_dists).argmin()
+            if team_centroid_dists[argmin] > player.search_radius:
                 argmin = None
 
             if argmin is None:
+                # Now try any color.
+                # Should use collision radius here.
+                argmin = np.array(centroid_distances).argmin()
+                if centroid_distances[argmin] > player.search_radius:
+                    argmin = None
+
+            if argmin is None:
+                # Now just extrapolate.
                 # We should probably move this into the player class.
                 player.extrapolate_centroid(self.last_frame)
                 player.detection_rectangles.append(None)
@@ -253,6 +254,10 @@ class PlayerTracker(object):
         for collision in self.collisions:
             for player in collision.players:
                 player.extrapolate_centroid(self.last_frame)
+                try:
+                    player.detection_rectangles[self.last_frame + 1] = None
+                except IndexError:
+                    player.detection_rectangles.append(None)
 
         self.last_frame += 1
 
@@ -298,7 +303,8 @@ class Collision(object):
             ]
             argmin = np.array(dist_to_centroids).argmin()
             list_of_candidates[i] = (argmin, dist_to_centroids[argmin])
-        def candidate_argmin_val(list_of_candidates):
+
+        def candidate_argmin_key(list_of_candidates):
             assert len(list_of_candidates) > 0, \
                 "Cannot argmin an empty dict."
             items = [x for x in list_of_candidates.iteritems()]
@@ -307,17 +313,19 @@ class Collision(object):
             for x in items:
                 if x[1][1] < minval:
                     argmin = x[0]
-            return list_of_candidates[argmin]
-        best_match_player = candidate_argmin_val(list_of_candidates)
+            return argmin
+
+        best_match_player_key = candidate_argmin_key(list_of_candidates)
+        best_match_player = list_of_candidates[best_match_player_key]
         if best_match_player[1] < search_radius:
             list_of_resolutions.append((
-                best_match_player[1], best_match_player[0]))
+                best_match_player[0], best_match_player_key))
             list_of_centroids[best_match_player[0]] = None
-            del list_of_candidates[best_match_player]
+            del list_of_candidates[best_match_player_key]
         else:
             return []
         while len(list_of_candidates) > 1:
-            for i, _ in list_of_candidates:
+            for i in list_of_candidates:
                 player = self.players[i]
                 dist_to_centroids = [
                     euclidean_distance(player.centroids[last_frame], x[0])
@@ -326,16 +334,16 @@ class Collision(object):
                 ]
                 argmin = np.array(dist_to_centroids).argmin()
                 list_of_candidates[i] = (argmin, dist_to_centroids[argmin])
-            best_match_player = candidate_argmin_val(list_of_candidates)
+            best_match_player_key = candidate_argmin_key(list_of_candidates)
+            best_match_player = list_of_candidates[best_match_player_key]
             if best_match_player[1] < search_radius:
                 list_of_resolutions.append((
-                    best_match_player[1], best_match_player[0]))
+                    best_match_player[0], best_match_player_key))
                 list_of_centroids[best_match_player[0]] = None
-                del list_of_candidates[best_match_player]
+                del list_of_candidates[best_match_player_key]
             else:
                 break
 
-        if len(list_of_resolutions) == 1: return []
         return list_of_resolutions
 
 class Player(object):
@@ -385,7 +393,7 @@ class Player(object):
         # (that is, the centroid of this player's detection rectangle).
         # Implementation note: will have to increase with every frame
         # that the player goes undetected.
-        self.search_radius = 100  # Arbitrary defualt value. May need to tweak.
+        self.search_radius = 50  # Arbitrary defualt value. May need to tweak.
 
     def extrapolate_centroid(self, last_frame):
         """Approximate the centroid point for the next frame."""
@@ -409,7 +417,10 @@ class Player(object):
         if samples != 0:
             extrapolated_velocity /= samples
         last_pos = np.array(self.centroids[last_frame])
-        self.centroids.append(tuple(last_pos + extrapolated_velocity))
+        try:
+            self.centroids[last_frame + 1] = tuple(last_pos + extrapolated_velocity)
+        except IndexError:
+            self.centroids.append(tuple(last_pos + extrapolated_velocity))
 
     def reset_search_radius(self):
         # The search radius increases for every failed detection frame.
@@ -417,7 +428,7 @@ class Player(object):
         # This currently faciliates a public reset,
         # although we should probably write handlers in this class
         # to trigger all of this stuff.
-        self.search_radius = 100
+        self.search_radius = 50
 
     def increment_search_radius(self):
         self.search_radius += 10
@@ -434,7 +445,9 @@ def euclidean_distance(p1, p2):
     p1 = (x1, y1) and p2 = (x2, y2).
     Returns a float >= 0.
     """
-    return np.linalg.norm(np.array(p1) - np.array(p2))
+    result = np.linalg.norm(np.array(p1) - np.array(p2))
+    assert result >= 0
+    return result
 
 if __name__ == '__main__':
     test()
