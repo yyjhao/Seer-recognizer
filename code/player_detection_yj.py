@@ -5,7 +5,7 @@ from scipy import stats
 
 # Read background image
 BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
-
+BACKGROUND_IMG_HSV = np.float32(cv2.cvtColor(BACKGROUND_IMG, cv2.COLOR_BGR2HSV))
 
 class Color(object):
     BLUE  = (255, 0, 0)
@@ -14,20 +14,24 @@ class Color(object):
     BLUE_GOALIE = (255, 50, 50)
     RED_GOALIE  = (50, 50, 255)
 
+# Shadow removal parameters
+VALUE_LOW_THRESH = 0.65
+VALUE_HIGH_THRESH = 1
+SATURATION_THRESH = 50
+HUE_THRESH = 5
 
 # Several linear scaled threshold values based on row
 def threshVal(row):
     if row < 190:
         return 50
     elif row < 470:
-        # 0-1029 -> 15-59
-        return float(row) / 1029 * 44 + 15
+        # 0-1029 -> 9-53
+        return float(row) / 1029 * 44 + 9
     elif row < 740:
-        # 0-1029 -> 24-65
-        return float(row) / 1029 * 41 + 24
-    # 0-1029 -> 17-60
-    return float(row) / 1029 * 43 + 17
-
+        # 0-1029 -> 18-59
+        return float(row) / 1029 * 41 + 18
+    # 0-1029 -> 11-54
+    return float(row) / 1029 * 43 + 11
 
 # Several linear scaled area filters based on row
 def areaVal(row):
@@ -43,7 +47,6 @@ def areaVal(row):
     # 0-1029 -> 0-4300
     return float(row) / 1029 * 4300
 
-
 # Generates a mask where the area inside the polygon
 # specified by the 4 pts is set to 1, and everything
 # else is set to 0
@@ -53,11 +56,10 @@ def generateMask(pt0, pt1, pt2, pt3):
     pts[1,:] = pt1 # Top right
     pts[2,:] = pt2 # Bottom right
     pts[3,:] = pt3 # Bottom left
-
+    
     mask = util.quadrangleMask(pts, BACKGROUND_IMG[:,:,0].shape)
-
+    
     return mask
-
 
 # Area of the field players are standing in
 FIELD_MASK = generateMask(
@@ -73,7 +75,6 @@ BLUE_GOALIE_MASK = generateMask(
     [400, 5700],
     [400, 5364]).astype('bool')
 
-
 # Filter out contours that:
 #   1. Are too small
 #   2. Have a wide aspect ratio
@@ -85,6 +86,19 @@ def contourFilter(contour_bound):
                     and FIELD_MASK[y + h, x + w / 2] != 0
     return check
 
+# Creates a mask where all shadows identified in the given frame
+# are given the value True, and all other points are False
+def shadowMask(frame_hsv):
+    frame_hsv_float = np.float32(frame_hsv)
+    hue_diff = np.absolute(frame_hsv_float[:,:,0] - BACKGROUND_IMG_HSV[:,:,0])
+    hue = np.minimum(hue_diff, 360 - hue_diff)
+    saturation = np.absolute(frame_hsv_float[:,:,1] - BACKGROUND_IMG_HSV[:,:,1])
+    value = frame_hsv_float[:,:,2] / BACKGROUND_IMG_HSV[:,:,2]
+
+    mask = np.logical_and(VALUE_LOW_THRESH <= value, value <= VALUE_HIGH_THRESH)
+    mask = np.logical_and(saturation <= SATURATION_THRESH, mask)
+    mask = np.logical_and(hue <= HUE_THRESH, mask)
+    return mask
 
 # Detects all players in the frame, returning a list of tuples containing the
 # bounding rectangle and color of each player of the form ((x, y, w, h), color)
@@ -111,9 +125,10 @@ def getPlayers(frame):
     thresh_vals = np.zeros(delta_E.shape)
     for row in range(thresh_vals.shape[0]):
         thresh_vals[row,:] = threshVal(row)
-    thresh_vals[BLUE_GOALIE_MASK] = 21
+    thresh_vals[BLUE_GOALIE_MASK] = 8
     binary_frame = np.zeros(delta_E.shape, 'uint8')
     binary_frame[delta_E > thresh_vals] = 255
+    binary_frame[shadowMask(frame_hsv)] = 0
 
     # Find all outer contours in the binary image
     contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
@@ -139,13 +154,12 @@ def getPlayers(frame):
 
         # Calculate statistics for hue of all the pixels within the contour
         mean_hue = np.mean(shifted_hues)
-        median_hue = np.median(shifted_hues)
 
         # Determine the player color based on hue statistics and position
-        if max(median_hue, mean_hue) > 57:
+        if mean_hue > 60:
             # blue player
             color = Color.BLUE
-        elif min(median_hue, mean_hue) < 30:
+        elif mean_hue < 35:
             # red player
             color = Color.RED
         elif bounding_rect[0] > 5000 and bounding_rect[1] < 800:
@@ -164,6 +178,7 @@ def getPlayers(frame):
             players.append(player)
 
     return players
+
 
 
 # Runs player detection on each frame of the stitched football video.

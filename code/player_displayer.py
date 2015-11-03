@@ -127,40 +127,75 @@ def createTopDownVideo(players_list):
     fourcc = cv2.cv.CV_FOURCC(*"MPEG")
     output = cv2.VideoWriter('./topDown.mpeg', fourcc, fps, movie_shape)
     
-    for i, players in enumerate(smoothedPlayers(players_list)):
+    for i, players in enumerate(detectedPlayers(players_list, H)):
         newImg = copy.copy(img)
         print "frame", i
         
-        _, newImg = addPlayers(newImg, H, players)
+        _, newImg = addPlayers(newImg, players)
         output.write(newImg)
-        if i > 69:
-            break
         
     cap.release()
     output.release()
 
-def smoothedPlayers(players_list):
+def detectedPlayers(players_list, H):
+    counters = {}
     tracker = PlayerTracker(players_list[0])
     for p in players_list[1:]:
         tracker.feed_rectangles(p)
     r = [[] for i in players_list]
-    for p in tracker.players:
-        for i, rect in enumerate(p.detection_rectangles):
-            r[i].append((rect, p.color))
+    player_points = [
+        smooth([project_point(point, H) for point in p.centroids])
+        for p in tracker.players
+    ]
+    for p, points in zip(tracker.players, player_points):
+        num = counters.get(p.color, 1)
+        counters[p.color] = num + 1
+        for i, point in enumerate(points):
+            r[i].append((point, p.color, str(num)))
     return r
+
+def project_point(point, H):
+    row = point[1]
+    col = point[0]
+    a = getTransformationCoords(H, [row,col])
+    return (a[1], a[0])
+
+
+def smooth_num(num_list):
+    weight = 0.95
+    for _ in range(50):
+        pre = None
+        nxt = None
+        new_list = []
+        for i, p in enumerate(num_list):
+            val = p * weight
+            if i + 1 < len(num_list):
+                nxt = num_list[i + 1]
+            else:
+                nxt = None
+            if not pre:
+                val += nxt * (1 - weight)
+            elif not nxt:
+                val += pre * (1 - weight)
+            else:
+                val += nxt * (1 - weight) / 2 + pre * (1 - weight) / 2
+            new_list.append(val)
+            pre = p
+        num_list = new_list
+    return [int(round(i)) for i in num_list]
+
+def smooth(point_list):
+    return zip(*[smooth_num(l) for l in zip(*point_list)])
+
     
 font = cv2.FONT_HERSHEY_SIMPLEX
 # Add all players in the given players list to the field
 # img: image to add the 
-def addPlayers(img, H, players):
+def addPlayers(img, players):
     a = np.zeros([2])
     playersOnTheField = []
     for ind, player in enumerate(players):
-        if not player[0]:
-            continue
-        row = player[0][1]+player[0][3]
-        col = player[0][0]+player[0][2]/2.0
-        a = getTransformationCoords(H, [row,col])
+        a = (player[0][1], player[0][0])
         try:
             for i in xrange(5):
                 for j in xrange(5):
@@ -172,8 +207,8 @@ def addPlayers(img, H, players):
             # If we reach that point the player was somewhere on the field
             playersOnTheField.append((player, (a[0],a[1])))
         except IndexError:
-            print 'Player '+str(i)+' out side the field!'
-        cv2.putText(img, str(ind), (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
+            print 'Player '+ str(ind) +' out side the field!'
+        cv2.putText(img, player[2], (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
 
     return playersOnTheField, img
 
@@ -192,7 +227,7 @@ def distanceBetweenCoordsTopDown(pos1, pos2):
 
 
 if __name__ == '__main__':
-    with open("players.txt") as fin:
+    with open("players_70.txt") as fin:
         createTopDownVideo([
             eval(line) for line in fin
         ])
