@@ -131,7 +131,7 @@ def createTopDownVideo(players_list):
         newImg = copy.copy(img)
         print "frame", i
         
-        _, newImg = addPlayers(newImg, players)
+        _, newImg = addPlayers(newImg, players, str(i))
         output.write(newImg)
         
     cap.release()
@@ -191,7 +191,7 @@ def smooth(point_list):
 font = cv2.FONT_HERSHEY_SIMPLEX
 # Add all players in the given players list to the field
 # img: image to add the 
-def addPlayers(img, players):
+def addPlayers(img, players, frameInd):
     a = np.zeros([2])
     playersOnTheField = []
     for ind, player in enumerate(players):
@@ -209,6 +209,7 @@ def addPlayers(img, players):
         except IndexError:
             print 'Player '+ str(ind) +' out side the field!'
         cv2.putText(img, player[2], (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
+        cv2.putText(img, "Frame: " + frameInd, (100, 100), font, 1, (255, 255, 255), 2)
 
     return playersOnTheField, img
 
