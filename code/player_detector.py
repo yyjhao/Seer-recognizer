@@ -51,14 +51,14 @@ def areaVal(row):
 # specified by the 4 pts is set to 1, and everything
 # else is set to 0
 def generateMask(pt0, pt1, pt2, pt3):
-  pts = np.zeros([4,2], dtype=np.int) 
+  pts = np.zeros([4,2], dtype=np.int)
   pts[0,:] = pt0 # Top left
   pts[1,:] = pt1 # Top right
   pts[2,:] = pt2 # Bottom right
   pts[3,:] = pt3 # Bottom left
-  
+
   mask = util.quadrangleMask(pts, BACKGROUND_IMG[:,:,0].shape)
-  
+
   return mask
 
 # Area of the field players are standing in
@@ -186,9 +186,11 @@ def getPlayers(frame):
 def main():
   frame_count = 7200
 
+
+  cap = cv2.VideoCapture('../videos/stitched.mpeg')
   # Read each frame
   for k in range(frame_count):
-    frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
+    _, frame = cap.read()
 
     # Detect players in frame
     players = getPlayers(frame)
@@ -202,8 +204,6 @@ def main():
     # Show and save the player detected frame
     cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
     print "frame", k
-    cv2.imshow("Player detection", detection_frame)
-    cv2.waitKey(0)
 
   cv2.destroyAllWindows()
 
