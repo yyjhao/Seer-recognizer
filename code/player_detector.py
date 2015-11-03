@@ -128,17 +128,17 @@ def getPlayers(frame):
     mask = np.zeros(binary_frame.shape).astype('uint8')
     cv2.drawContours(mask, [contour], 0, 255, -1)
     hues = frame_hue[np.nonzero(mask)]
+    shifted_hues = np.remainder(hues + 10, 180)
 
     # Calculate statistics for hue of all the pixels within the contour
-    mean_hue = np.mean(hues)
-    median_hue = np.median(hues)
-    mode_hue = stats.mode(hues, axis=None)[0][0]
+    mean_hue = np.mean(shifted_hues)
+    median_hue = np.median(shifted_hues)
 
     # Determine the player color based on hue statistics and position
-    if max(median_hue, mode_hue, mean_hue) > 60:
+    if max(median_hue, mean_hue) > 57:
       # blue player
       color = Color.BLUE
-    elif min(median_hue, mode_hue, mean_hue) < 15:
+    elif min(median_hue, mean_hue) < 30:
       # red player
       color = Color.RED
     elif bounding_rect[0] > 5000 and bounding_rect[1] < 800:
@@ -153,7 +153,7 @@ def getPlayers(frame):
 
     # Append the player bounding rectangle and color to the list
     if color != Color.GREEN or bounding_rect[1] < 800:
-      player = (bounding_rect, color, mean_hue, median_hue, mode_hue)
+      player = (bounding_rect, color)
       players.append(player)
 
   return players
