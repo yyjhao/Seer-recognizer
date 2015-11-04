@@ -6,10 +6,10 @@ import numpy as np
 import copy
 from player_tracker import PlayerTracker
 
-BORDER = 50
+BORDER = 100
 PATH_TOP_DOWN_IMG = '../images/FootballField_small_border.png'
-WIDTH_TD_IMG = 1300
-HEIGHT_TD_IMG = 900
+WIDTH_TD_IMG = 1400
+HEIGHT_TD_IMG = 1000
 
 # Dimensions of the field in m without borders
 FIELD_HEIGHT = 70.0
@@ -226,9 +226,62 @@ def distanceBetweenCoordsTopDown(pos1, pos2):
         
     return distance * PX_TO_M
 
+def evalMapping():
+    img = cv2.imread(PATH_TOP_DOWN_IMG)
+    H = getHomographyMatrix()
+    
+    ## Points on the image (row, col) == (y,x)
+    pts = np.zeros([21,2])
+    ## Special points on the image
+    pts[0,:] = [300,2370] # A (in the white)
+    pts[1,:] = [443,1929] # B (in the white)
+    pts[2,:] = [245,2817] # C (in the white)
+    pts[3,:] = [591,2000] # D (in the white)
+    pts[4,:] = [358,2664] # E (in the white)
+    pts[5,:] = [359,3454] # F (in the white)
+    pts[6,:] = [355,4083] # G (in the white)
+    pts[7,:] = [340,4880] # H (in the white)
+    pts[8,:] = [231,4678] # I (in the white)
+    pts[9,:] = [576,5705] # J (in the white)
+    pts[10,:] = [280,5176] # K (in the white)
+    pts[11,:] = [421,5722] # L (in the white)
+    pts[12,:] = [279,5341] # M (in the white)
+    pts[13,:] = [420,5948] # N (in the white)
+    pts[14,:] = [301,2219] # O (in the white)
+    pts[15,:] = [445,1721] # P (in the white)
+        
+    ## Corners and center
+    pts[16,:] = [196,2593] # Top left (outer coord)
+    pts[17,:] = [177,4892] # Top right (outer coord)
+    pts[18,:] = [950,8206] # Bottom right (outer coord)
+    pts[19,:] = [942,40] # Bottom left (outer coord)
+    pts[20,:] = [350,3767] # Center
+    
+    a = np.zeros([2])
+    i = 0
+    for pt in pts:
+        i = i + 1
+        a = getTransformationCoords(H, [pt[0],pt[1]])
+        try:
+            for i in xrange(5):
+                for j in xrange(5):
+                    if i+j <= 5 :
+                        img[int(a[0]+i),int(a[1]+j)] = [0,0,255]
+                        img[int(a[0]+i),int(a[1]-j)] = [0,0,255]
+                        img[int(a[0]-i),int(a[1]+j)] = [0,0,255]
+                        img[int(a[0]-i),int(a[1]-j)] = [0,0,255]
+        except IndexError:
+            print 'Player '+str(i)+' out side the field!'
+    
+    cv2.imwrite('EvalField1.jpg', img)        
+    #cv2.imshow('new img', img)
+    cv2.waitKey(0)
 
 if __name__ == '__main__':
+    evalMapping()
+    '''
     with open("players.txt") as fin:
         createTopDownVideo([
             eval(line) for line in fin
         ])
+    '''
