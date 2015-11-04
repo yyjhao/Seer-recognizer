@@ -14,29 +14,28 @@ def quadrangleMask(pts, imgShape):
     # All the '+1' in this method are necessary to ensure that the given 4 points won't be removed.
 
     mask = np.zeros(imgShape)
-    pts[0,:] = list(reversed(pts[0,:]))
-    pts[1,:] = list(reversed(pts[1,:]))
-    pts[2,:] = list(reversed(pts[2,:]))
-    pts[3,:] = list(reversed(pts[3,:]))
     fill = 1
     if len(imgShape) == 3:
         fill = [1 for i in range(imgShape[2])]
-    cv2.fillPoly(mask, [pts], fill)
+    cv2.fillConvexPoly(mask, pts, fill)
     return mask
 
 def testMask():
     ## Corners and center
-    pts = np.zeros([4,2], dtype=np.int)
-    pts[0,:] = [207, 3042] # Top left
-    pts[1,:] = [187, 5360] # Top right
-    pts[2,:] = [999,8680] # Bottom right (outside of the image)
-    pts[3,:] = [1042, 50] # Bottom left
-
-    img = cv2.imread('../images/stitched_background.jpg')
-
+    pts = np.zeros([7,2], dtype=np.int) 
+    pts[0,:] = [2592, 199] # Top left
+    pts[1,:] = [4892, 182] # Top right
+    pts[2,:] = [5400, 288] # Goalie top left
+    pts[3,:] = [5948, 288] # Goalie top right
+    pts[4,:] = [5948, 408] # Goalie bottom right
+    pts[5,:] = [8500, 990] # Bottom right
+    pts[6,:] = [-100, 990] # Bottom left
+    
+    img = cv2.imread('../images/stitched_background.png')
+    
     mask = quadrangleMask(pts, img.shape)
-
-    cv2.imwrite('mask.jpg', mask*255)
+    
+    cv2.imwrite('../images/mask.png', img*mask)
 
 def rect_centroid(rect):
     """ Given a rectangle defined by rect = (x, y, w, h),
