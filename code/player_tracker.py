@@ -308,7 +308,7 @@ class Collision(object):
             assert len(list_of_candidates) > 0, \
                 "Cannot argmin an empty dict."
             items = [x for x in list_of_candidates.iteritems()]
-            argmin = 0
+            argmin = list_of_candidates.keys()[0]
             minval = items[0][1][1]
             for x in items:
                 if x[1][1] < minval:

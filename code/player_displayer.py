@@ -228,7 +228,7 @@ def distanceBetweenCoordsTopDown(pos1, pos2):
 
 
 if __name__ == '__main__':
-    with open("players_70.txt") as fin:
+    with open("players.txt") as fin:
         createTopDownVideo([
             eval(line) for line in fin
         ])

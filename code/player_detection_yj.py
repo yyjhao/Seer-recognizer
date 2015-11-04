@@ -4,7 +4,7 @@ import util
 from scipy import stats
 
 # Read background image
-BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
+BACKGROUND_IMG = cv2.imread('../images/background2.png')
 BACKGROUND_IMG_HSV = np.float32(cv2.cvtColor(BACKGROUND_IMG, cv2.COLOR_BGR2HSV))
 
 class Color(object):
@@ -130,6 +130,9 @@ def getPlayers(frame):
     binary_frame[delta_E > thresh_vals] = 255
     binary_frame[shadowMask(frame_hsv)] = 0
 
+    # cv2.imwrite("yo.png", binary_frame)
+    # quit()
+
     # Find all outer contours in the binary image
     contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
                                                                  cv2.CHAIN_APPROX_SIMPLE)
@@ -192,11 +195,23 @@ def main():
     with open("players.txt", 'w') as fout:
         for k in range(frame_count):
             frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
+            # frame = cv2.imread('../images/test.png')
 
             # Detect players in frame
             players = getPlayers(frame)
             fout.write(str(players))
             fout.write("\n")
+
+            # detection_frame = frame.copy()
+            # for player in players:
+            #   x, y, w, h = player[0]
+            #   color = player[1]
+            #   # Draw the bounding rectangle around each detected player
+            #   cv2.rectangle(detection_frame, (x,y), (x+w,y+h), color, 1)
+
+            # # Show and save the player detected frame
+            # cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
+            # quit()
 
             # Show and save the player detected frame
             print "frame", k
