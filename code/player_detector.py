@@ -186,11 +186,9 @@ def getPlayers(frame):
 def main():
   frame_count = 7200
 
-
-  cap = cv2.VideoCapture('../videos/stitched.mpeg')
   # Read each frame
   for k in range(frame_count):
-    _, frame = cap.read()
+    frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
 
     # Detect players in frame
     players = getPlayers(frame)
@@ -204,6 +202,8 @@ def main():
     # Show and save the player detected frame
     cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
     print "frame", k
+    cv2.imshow("Player detection", detection_frame)
+    cv2.waitKey(0)
 
   cv2.destroyAllWindows()
 
