@@ -181,7 +181,7 @@ def getLastFrame(team1Name, team1Color, team2Name, team2Color, playersPos):
             col = i % 3
             name = "Player" + str(i+1) + ""
             
-            heatmapPath = '../images/heatmap_team'+str(t)+'/team'+str(t)+'_player' + str(i) + '.png'
+            heatmapPath = '../images/heatmaps/team'+str(t)+'_player' + str(i) + '.png'
             heatmap = cv2.imread(heatmapPath)
             resized_image = cv2.resize(heatmap, (230, 164))
             

@@ -23,7 +23,7 @@ FIELD_WIDTH = 105.0
 PX_TO_M = FIELD_WIDTH / (WIDTH_TD_IMG - 2 * BORDER) 
 
 def getHomographyMatrix():
-    img = cv2.imread(PATH_TOP_DOWN_IMG)  # , cv2.CV_LOAD_IMAGE_GRAYSCALE)
+    img = cv2.imread(PATH_TOP_DOWN_IMG)
     
     # Define the 4 corner of the football field (target points), thereby the width will be kept and only the height adjusted
     # so we don't accidently lose to many information
@@ -56,8 +56,6 @@ def getHomographyMatrix():
     target_pts[19, :] = [img.shape[0] - 1 - BORDER, BORDER]  # Bottom left
     target_pts[20, :] = [(img.shape[0]) / 2, img.shape[1] / 2]  # Center points
     
-    
-    
     # # Points on the image (row, col) == (y,x)
     pts = np.zeros([21, 2])
     # # Special points on the image
@@ -77,15 +75,12 @@ def getHomographyMatrix():
     pts[13, :] = [420, 5948]  # N (in the white)
     pts[14, :] = [301, 2219]  # O (in the white)
     pts[15, :] = [445, 1721]  # P (in the white)
-        
     # # Corners and center
     pts[16, :] = [196, 2593]  # Top left (outer coord)
     pts[17, :] = [177, 4892]  # Top right (outer coord)
     pts[18, :] = [950, 8206]  # Bottom right (outer coord)
     pts[19, :] = [942, 40]  # Bottom left (outer coord)
     pts[20, :] = [350, 3767]  # Center
-    
-    
     
     # Calculate the homography matrix, which will be used to project any point from the video to the top down view.
     return homography(target_pts, pts) 
@@ -120,8 +115,7 @@ def homography(target_pts, source_pts):
     return H / H[2][2]
 
 def createTopDownVideo(players_list):
-    img = cv2.imread(PATH_TOP_DOWN_IMG)  # , cv2.CV_LOAD_IMAGE_GRAYSCALE)
-    H = getHomographyMatrix()
+    img = cv2.imread(PATH_TOP_DOWN_IMG)
     
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
 
@@ -129,7 +123,7 @@ def createTopDownVideo(players_list):
     movie_shape = (img.shape[1], img.shape[0])
 
     fourcc = cv2.cv.CV_FOURCC(*"MPEG")
-    output = cv2.VideoWriter('./topDown1.mpeg', fourcc, fps, movie_shape)
+    output = cv2.VideoWriter('./topDown.mpeg', fourcc, fps, movie_shape)
     
     for i, players in enumerate(players_list):
         newImg = copy.copy(img)
@@ -281,8 +275,6 @@ def evalMapping():
             print 'Player ' + str(i) + ' out side the field!'
     
     cv2.imwrite('EvalField1.jpg', img)        
-    # cv2.imshow('new img', img)
-    cv2.waitKey(0)
 
 def playerDataToSmoothedTopDown(inputFilePath, outputFilePath):
     with open(inputFilePath) as fin:
@@ -343,19 +335,15 @@ def getDistancesWalkedFramewise(playerPos):
                 
     return playerDist
 
-def getHeatmaps(playerPos):
-    heatmaps = []
+'''
+    Generates a heatmap for each player
+'''
+def generateHeatmaps(playerPos):
     for t, team in enumerate(playerPos):
-        teammaps = []
         for p, player in enumerate(team):
             print "Generate Heatmaps for team "+str(t)+" player "+str(p)
-            cv2.imwrite("../images/team"+str(t)+"_player"+str(p)+".png", heatmap.getFieldHeatmap(player))
-            #teammaps.append(heatmap.getFieldHeatmap(player))
-        
-        #heatmaps.append(teammaps)
-        #break
-    
-    return heatmaps
+            cv2.imwrite("../images/heatmaps/team"+str(t)+"_player"+str(p)+".png", heatmap.getFieldHeatmap(player))
+
 
 '''
     Parameters:
@@ -433,14 +421,10 @@ def drawOffsetLines(players, img, Hinv):
 if __name__ == '__main__':
     # evalMapping()
     playerDataToSmoothedTopDown("players_1533.txt", PATH_SMOOTHED_TOP_DOWN_DATA)
-    #framewisePos, playersPos = getPlayerWiseTopDown()
+    _, playersPos = getPlayerWiseTopDown()
     #getDistancesWalkedFramewise(playerPos)
-    #heatmaps = getHeatmaps(playerPos)
-    '''
-    for t, team in enumerate(heatmaps):
-        for p, player in enumerate(team):
-            cv2.imwrite("../images/team"+str(t)+"_player"+str(p)+".png", player)
-    '''
+    generateHeatmaps(playersPos)
+    
 
     '''
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
