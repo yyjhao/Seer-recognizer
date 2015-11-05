@@ -247,7 +247,7 @@ class PlayerTracker(object):
                 collision.players[index_player] = None
                 print "Removing player %r from a collision." % player.pid
             # Remove all removed players from the list. XXX will refactor
-            collision.players = [x for x if x is not None in collision.players]
+            collision.players = [x for x in collision.players if x is not None]
             assert len(collision.players) > 0, \
                 "Collision objects should always have a last player!"
             # Remove this collision if it is fully resolved.
