@@ -244,8 +244,10 @@ class PlayerTracker(object):
                 tentative_exact_pos[player] = index_centroid
                 detections[index_centroid].claimers.append(player)
                 # Also, remove this player from the collision.
-                del collision.players[index_player]
+                collision.players[index_player] = None
                 print "Removing player %r from a collision." % player.pid
+            # Remove all removed players from the list. XXX will refactor
+            collision.players = [x for x if x is not None in collision.players]
             assert len(collision.players) > 0, \
                 "Collision objects should always have a last player!"
             # Remove this collision if it is fully resolved.
@@ -462,7 +464,7 @@ class Player(object):
         self.process_moving_average(len(self.centroids) - 1)
         # Compute and append the raw position.
         x, y, w, h = rectangle
-        self.raw_position.append((x + w/2), y + h)
+        self.raw_positions.append((x + w/2, y + h))
 
         self.last_finished += 1
 
