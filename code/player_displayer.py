@@ -146,7 +146,7 @@ def detectedPlayers(players_list, H):
         tracker.feed_rectangles(p)
     r = [[] for i in players_list]
     player_points = [
-        smooth([project_point(point, H) for point in p.centroids])
+        smooth([project_point(point, H) for point in p.raw_positions])
         for p in tracker.players
     ]
     for p, points in zip(tracker.players, player_points):
@@ -164,7 +164,7 @@ def project_point(point, H):
 
 
 def smooth_num(num_list):
-    weight = 0.95
+    weight = 0.9
     for _ in range(50):
         pre = None
         nxt = None
@@ -292,7 +292,7 @@ def playerDataToSmoothedTopDown(inputFilePath, outputFilePath):
 
 if __name__ == '__main__':
     # evalMapping()
-    playerDataToSmoothedTopDown("players_test3.txt", PATH_SMOOTHED_TOP_DOWN_DATA)
+    playerDataToSmoothedTopDown("players_1533.txt", PATH_SMOOTHED_TOP_DOWN_DATA)
     
     '''
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
