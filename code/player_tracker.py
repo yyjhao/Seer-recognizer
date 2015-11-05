@@ -42,18 +42,14 @@ def test():
         print "Usage: python %s <start_frame> <num_frames>" % sys.argv[0]
         sys.exit()
     NUM_SKIP = int(sys.argv[1])
-    assert NUM_SKIP >= 4
+    assert NUM_SKIP >= 3
     NUM_FRAMES = int(sys.argv[2])
 
-    with open("players_cat.txt") as fin:
+    with open("players_1533.txt") as fin:
         playersList = (eval(line) for line in fin)
-        playersList.next()
-        playersList.next()
-        playersList.next()
-        playersList.next()
 
     # cap = cv2.VideoCapture('../videos/stitched.mpeg')
-        i = 4
+        i = 3
         players = playersList.next()
         pt = PlayerTracker(players)
         print "Processed frame %r." % i
@@ -72,7 +68,7 @@ def test():
     for i in range(NUM_SKIP):
         cap.grab()
     for k in range(NUM_SKIP, NUM_SKIP + NUM_FRAMES):
-        i = k - 4
+        i = k - 3
         _, frame = cap.read()
         print "Frame %r:" % k
         # Draw the detection rectangles.
@@ -304,7 +300,7 @@ class PlayerTracker(object):
                         nearest_player = player
                         selected_collision = collision
             if nearest_player is not None:
-                if min_dist > 101:
+                if min_dist > 75:
                     if self.last_frame + 1 not in self.big_jumps:
                         self.big_jumps[self.last_frame + 1] = []
                     self.big_jumps[self.last_frame + 1].append((nearest_player.pid, min_dist))
@@ -441,10 +437,10 @@ class Player(object):
             extrapolated_velocity = \
                 np.array(self.centroid_mas[self.last_finished]) - \
                 np.array(self.centroid_mas[self.last_finished - 1])
-        # # Decelerate the search velocity.
-        # if np.linalg.norm(extrapolated_velocity) > 3:
-        #     num_frames_undetected = len(self.centroids) - self.last_finished
-        #     extrapolated_velocity *= 0.9**num_frames_undetected
+        # Decelerate the search velocity.
+        if np.linalg.norm(extrapolated_velocity) > 3:
+            num_frames_undetected = len(self.centroids) - self.last_finished
+            extrapolated_velocity *= 0.9**num_frames_undetected
         # Cap the search velocity.
         extrapolated_velocity /= max(np.linalg.norm(extrapolated_velocity) / 10.0, 1)
 
@@ -541,12 +537,12 @@ class Player(object):
         self.centroid_mas.append(centroid_ma)
 
     def _reset_search_radius(self):
-        self.search_radius = 30  # Maybe need to tweak.
+        self.search_radius = 20  # Maybe need to tweak.
 
     def _reset_resolution_radius(self):
-        self.resolution_radius = 100
+        self.resolution_radius = 50
 
-    def _increment_search_radius(self, val=10):
+    def _increment_search_radius(self, val=3):
         self.search_radius += val
 
     def _increment_resolution_radius(self, val=10):

@@ -116,7 +116,7 @@ def homography(target_pts, source_pts):
 
 def createTopDownVideo():
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
-        players_list = [eval(line) for line in fin]
+        players_list = [eval(line) for line in fin][4:]
         
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     
@@ -166,7 +166,7 @@ def bound_point(point):
 
 
 def smooth_num(num_list):
-    weight = 0.9
+    weight = 0.8
     for _ in range(50):
         pre = None
         nxt = None
@@ -281,14 +281,23 @@ def evalMapping():
 
 def playerDataToSmoothedTopDown(inputFilePath):
     with open(inputFilePath) as fin:
-        players_list = [ eval(line) for line in fin ]
+        players_list = [ eval(line) for line in fin ][4:]
+
+        for i in range(len(players_list)):
+            players_list[i] = [p for p in players_list[i] if keepRect(p[0])]
         H = getHomographyMatrix()
         smoothedData = detectedPlayers(players_list, H)
-        
+
     with open(PATH_SMOOTHED_TOP_DOWN_DATA, 'w') as fout:
         for frameData in smoothedData:
             fout.write(str(frameData))
             fout.write("\n")
+
+def keepRect(rect):
+    if rect[1] + rect[3] > 950:
+        print "removed a rect"
+        return False
+    return True
 
 def getPlayerWiseTopDown():
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
@@ -423,8 +432,8 @@ def drawOffsetLines(players, img, Hinv):
 
 if __name__ == '__main__':
     # evalMapping()
-    playerDataToSmoothedTopDown("players_1533.txt")
-    _, playersPos = getPlayerWiseTopDown()
+    playerDataToSmoothedTopDown("players_cat.txt")
+    # _, playersPos = getPlayerWiseTopDown()
     #getDistancesWalkedFramewise(playerPos)
-    generateHeatmaps(playersPos)
-    
+    # generateHeatmaps(playersPos)
+    createTopDownVideo()
