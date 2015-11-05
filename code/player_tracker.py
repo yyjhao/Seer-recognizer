@@ -45,17 +45,16 @@ def test():
     assert NUM_SKIP >= 3
     NUM_FRAMES = int(sys.argv[2])
 
-    with open("players_514.txt") as fin:
+    with open("players_1533.txt") as fin:
         playersList = (eval(line) for line in fin)
 
     # cap = cv2.VideoCapture('../videos/stitched.mpeg')
-        for i in range(NUM_SKIP - 3):
-            _ = playersList.next()
+        i = 3
         players = playersList.next()
         pt = PlayerTracker(players)
-        print "Processed frame 0."
-        i = 1
-        while i < NUM_FRAMES:
+        print "Processed frame %r." % i
+        i += 1
+        while i < NUM_SKIP + NUM_FRAMES:
             rects = playersList.next()
             pt.feed_rectangles(rects)
             print "Processed frame %r." % i
@@ -65,10 +64,11 @@ def test():
 
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
     for i in range(NUM_SKIP):
-        _, _ = cap.read()
-    for i in range(NUM_FRAMES):
+        cap.grab()
+    for k in range(NUM_SKIP, NUM_SKIP + NUM_FRAMES):
+        i = k - 3
         _, frame = cap.read()
-        print "Frame %r:" % i
+        print "Frame %r:" % k
         # Draw the detection rectangles.
         for detection in pt.detections_by_frame[i]:
             x, y, w, h = detection.rectangle
@@ -87,7 +87,7 @@ def test():
                 print "Player %r: %r (extrapolated)" % (player.pid, loc)
                 cv2.circle(frame, loc, 5, (255, 255, 255), -1)
                 cv2.putText(frame, str(player.pid), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
-        cv2.imwrite('../images/player_tracking/%s.png' % i, frame)
+        cv2.imwrite('../images/player_tracking/%s.png' % k, frame)
 
 
 
@@ -238,14 +238,6 @@ class PlayerTracker(object):
             # XXX use last player size as point to rect search radius
             # XXX also write finalizer
 
-        # Ignore exact but incorrect-color matches; extrapolate instead.
-        for detection in detections:
-            if len(detection.claimers) == 1:
-                player = [x for x in detection.claimers][0]
-                if player.color != detection.color:
-                    del detection.claimers[player]
-                    player.extrapolate_next_location()
-
         # -- Attempt to resolve collisions in this frame. --
         list_of_collisions = [
             (i, detection) for i, detection in enumerate(detections)
@@ -263,11 +255,16 @@ class PlayerTracker(object):
         #   - Remove the nearest player of this color from the collision.
 
         for i, unclaimed in list_of_unclaimed:
+            min_dist = 999999
+            nearest_player = None
+            selected_collision = None
             for j, collision in list_of_collisions:
+                # We resolve collisions during the loop, so we should skip
+                # if this has already been resolved.
+                if len(collision.claimers) < 2: continue
                 dist = dist_point_to_rect(unclaimed.centroid, collision.rectangle)
-                if dist < 100:  # XXX arbitrary. maybe use rect-rect distance???
-                    nearest_player = None
-                    min_dist = 999999
+                if dist < max([player.resolution_radius
+                        for player in collision.claimers]):
                     for player in collision.claimers:
                         if player.color != unclaimed.color: continue
                         dist_player = euclidean_distance(
@@ -276,10 +273,20 @@ class PlayerTracker(object):
                         if dist_player > min_dist: continue
                         min_dist = dist_player
                         nearest_player = player
-                    if nearest_player is not None:
-                        unclaimed.claimers[nearest_player] = None
-                        del collision.claimers[nearest_player]
-                        break
+                        selected_collision = collision
+            if nearest_player is not None:
+                unclaimed.claimers[nearest_player] = None
+                del selected_collision.claimers[nearest_player]
+                break
+
+        # XXX: trying out moving this to various locations
+        # Ignore exact but incorrect-color matches; extrapolate instead.
+        for detection in detections:
+            if len(detection.claimers) == 1:
+                player = [x for x in detection.claimers][0]
+                if player.color != detection.color:
+                    del detection.claimers[player]
+                    player.extrapolate_next_location()
 
         # Now save all detections.
         for detection in detections:
@@ -294,13 +301,6 @@ class PlayerTracker(object):
                         detection.centroid, detection.rectangle)
 
         self.last_frame += 1
-
-    def finalize(self):
-        """ Call this after you are finished providing data and before
-        reading raw_positions.
-        """
-        # Necessary to "finalize" data of players who are being extrapolated
-        # in the last frames.
 
 class Player(object):
     """ Represents a player, their tracked position, and any player detection
@@ -321,15 +321,17 @@ class Player(object):
         # Implementation note: will have to increase with every frame
         # that the player goes undetected.
         # Distance interpretation: self point to target rectangle.
-        self.search_radius = 20 # Arbitrary defualt value. May need to tweak.
+        self.search_radius = None
+        self._reset_search_radius()
+
+        # Similar, but used by unclaimed rectangles when searching for collisions.
+        self.resolution_radius = None
+        self._reset_resolution_radius()
 
         # The index of the last "finished" frame; the last frame with exact
-        # position and tracking data.
-        # XXX TODO: at the end of the video, some players might be
-        # in extrapolating mode; we should set their locations.
+        # moving average data (raw positions are now no longer retroactively
+        # fixed).
         self.last_finished = -1
-
-        # XXX: Maybe move homography, smoothing, and distancing into here?
 
         # -- Fields that are mandatory for every tracking frame. --
         # (That is, we MUST update these fields with every frame we process,
@@ -386,6 +388,7 @@ class Player(object):
         # Compute and append the centroid moving average.
         self.process_moving_average(len(self.centroids) - 1)
         self._reset_search_radius()
+        self._reset_resolution_radius()
 
         self.last_finished += 1
 
@@ -400,15 +403,21 @@ class Player(object):
         # contained within the collsion rectangle,
         # we try to stay within an even tighter boundary.
 
-        # Implementation: We use the velocity of the last exact moving average.
+        # Implementation: We use the velocity of the last exact moving average,
+        # but decelerating over time.
         if self.last_finished == 0:
             extrapolated_velocity = np.array((0, 0))
         else:
             extrapolated_velocity = \
                 np.array(self.centroid_mas[self.last_finished]) - \
                 np.array(self.centroid_mas[self.last_finished - 1])
+        # Decelerate the search velocity.
+        if np.linalg.norm(extrapolated_velocity) > 3:
+            num_frames_undetected = len(self.centroids) - self.last_finished
+            extrapolated_velocity *= 0.9**num_frames_undetected
+        # Cap the search velocity.
+        extrapolated_velocity /= max(np.linalg.norm(extrapolated_velocity) / 10.0, 1)
 
-        # XXX: and search radius too? prolly dun need
 
         last_position = np.array(self.centroids[-1])
         extrapolated_position = tuple(last_position + extrapolated_velocity)
@@ -431,13 +440,16 @@ class Player(object):
         self.centroids.append(extrapolated_position)
         self.rectangles.append(None)
         self.raw_positions.append((
-            extrapolated_position[0],
-            extrapolated_position[1] + (2 * y_padding)))
+            int(extrapolated_position[0]),
+            int(extrapolated_position[1] + (2 * y_padding))))
         # Only increment search radius if this is not a collision.
         # We will rely on aggressive collision resolution from unclaimed
         # detections to resolve detections when this player has strayed
         # far from their extrapolated location.
-        if bounds is None: self._increment_search_radius()
+        if bounds is None:
+            self._increment_search_radius()
+        # No harm to increment resolution radius as well.
+        self._increment_resolution_radius()
 
     def backfill_unfinished_frames(self, fno):
         """ Backfills unfinished frames up to fno, inclusive, if any,
@@ -499,14 +511,21 @@ class Player(object):
             centroid_ma += np.array(self.centroids[i])
             k += 1
         assert k > 0
-        centroid_ma /= k
+        centroid_ma /= k * 1.0
+        centroid_ma = (int(centroid_ma[0]), int(centroid_ma[1]))
         self.centroid_mas.append(centroid_ma)
 
     def _reset_search_radius(self):
-        self.search_radius = 50
+        self.search_radius = 20  # Maybe need to tweak.
 
-    def _increment_search_radius(self):
-        self.search_radius += 3
+    def _reset_resolution_radius(self):
+        self.resolution_radius = 100
+
+    def _increment_search_radius(self, val=3):
+        self.search_radius += val
+
+    def _increment_resolution_radius(self, val=10):
+        self.resolution_radius += val
 
 class Detection(object):
     """ Represents a single raw detection datum for some frame.
