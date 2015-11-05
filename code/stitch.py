@@ -1,9 +1,6 @@
 import cv2
 import cv2.cv as cv
 import numpy as np
-import stitcher
-import matplotlib.pyplot as plt
-import sys
 
 right_add = 3600
 left_add = 2700
@@ -85,8 +82,8 @@ def overlap(top_image, bottom_image, left):
     if left:
         if not left_cached:
             # get grayscale pic (so a nicer matrix)
-            ret, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
-            ret, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
             # intersect the grayscale pic to get our mask
             left_intersect = cv2.bitwise_and(tgray, mtgray)
             # move the mask a bit to the left
@@ -109,8 +106,8 @@ def overlap(top_image, bottom_image, left):
         return bottom_image - mtinter + top_image + linemtinter - linetinter
     else:
         if not right_cached:
-            ret, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
-            ret, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
             right_intersect = cv2.bitwise_and(tgray, mtgray)
             right_cached = True
         intersect = right_intersect

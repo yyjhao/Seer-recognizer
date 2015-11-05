@@ -1,8 +1,6 @@
 import cv2
 import cv2.cv as cv
 import numpy as np
-import stitcher
-import matplotlib.pyplot as plt
 
 right_add = 3500
 left_add = 3200
@@ -69,8 +67,8 @@ def overlap(top_image, bottom_image, left):
     global right_intersect
     if left:
         if not left_cached:
-            ret, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
-            ret, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
             left_intersect = cv2.bitwise_and(tgray, mtgray)
             shiftintersect = cv2.warpAffine(left_intersect, leftonetran, (left_intersect.shape[1], left_intersect.shape[0]))
             left_intersect_line = left_intersect - shiftintersect
@@ -86,8 +84,8 @@ def overlap(top_image, bottom_image, left):
         return bottom_image - mtinter + top_image + linemtinter - linetinter
     else:
         if not right_cached:
-            ret, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
-            ret, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, tgray = cv2.threshold(cv2.cvtColor(top_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
+            _, mtgray = cv2.threshold(cv2.cvtColor(bottom_image, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY)
             right_intersect = cv2.bitwise_and(tgray, mtgray)
             right_cached = True
         intersect = right_intersect
