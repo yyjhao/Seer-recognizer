@@ -24,7 +24,9 @@ HUE_THRESH = 4
 def threshVal(row):
     if row < 175:
         return 100
-    if row < 200:
+    if row < 183:
+        return 20
+    if row < 187:
         return 40
     elif row < 470:
         # 0-1029 -> 11-55
@@ -47,7 +49,7 @@ def areaVal(row):
         # 0-1029 -> 0-2200
         return float(row) / 1029 * 2200
     # 0-1029 -> 0-4300
-    return float(row) / 1029 * 4300
+    return float(row) / 1029 * 3800
 
 # Generates a mask where the area inside the polygon
 # specified by the 4 pts is set to 1, and everything
@@ -142,9 +144,9 @@ def getPlayers(frame):
     thresh_vals[BLUE_GOALIE_MASK] = 10
     binary_frame = np.zeros(delta_E.shape, 'uint8')
     binary_frame[delta_E > thresh_vals] = 255
-    # cv2.imwrite('../images/player_detection/binaries/{}.png'.format(k), binary_frame)
+    cv2.imwrite('../images/player_detection/binaries/{}.png'.format(k), binary_frame)
     binary_frame[shadowMask(frame_hsv)] = 0
-    # cv2.imwrite('../images/player_detection/shadow_removed/{}.png'.format(k), binary_frame)
+    cv2.imwrite('../images/player_detection/shadow_removed/{}.png'.format(k), binary_frame)
 
     # Find all outer contours in the binary image
     contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
@@ -229,10 +231,10 @@ def main():
 
     # Read each frame
     for k in range(frame_count):
-        frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
+        frame = cv2.imread('../images/stitched_frames/{}.png'.format(k+1230))
 
         # Detect players in frame
-        players = getPlayers(frame, k)
+        players = getPlayers(frame, k+1230)
         detection_frame = frame.copy()
         for player in players:
             x, y, w, h = player[0]
@@ -243,8 +245,8 @@ def main():
             cv2.putText(detection_frame, text, (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255))
 
         # Show and save the player detected frame
-        # cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
-        print "frame", k
+        cv2.imwrite('../images/player_detection/detections/{}.png'.format(k+1230), detection_frame)
+        print "frame", k+1230
 
 def main2():
     frame_count = 7200
