@@ -144,9 +144,9 @@ def getPlayers(frame):
     thresh_vals[BLUE_GOALIE_MASK] = 10
     binary_frame = np.zeros(delta_E.shape, 'uint8')
     binary_frame[delta_E > thresh_vals] = 255
-    cv2.imwrite('../images/player_detection/binaries/{}.png'.format(k), binary_frame)
+    # cv2.imwrite('../images/player_detection/binaries/{}.png'.format(k), binary_frame)
     binary_frame[shadowMask(frame_hsv)] = 0
-    cv2.imwrite('../images/player_detection/shadow_removed/{}.png'.format(k), binary_frame)
+    # cv2.imwrite('../images/player_detection/shadow_removed/{}.png'.format(k), binary_frame)
 
     # Find all outer contours in the binary image
     contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
@@ -282,7 +282,7 @@ def main3():
     frame_count = 7200
     offset = 0
 
-    with open("players_test6.txt", 'w') as fout:
+    with open("players_test7.txt", 'w') as fout:
         # Read each frame
         for k in range(frame_count-offset):
             frame = cv2.imread('../images/stitched_frames/{}.png'.format(k+offset))
