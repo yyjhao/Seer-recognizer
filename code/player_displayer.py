@@ -114,7 +114,10 @@ def homography(target_pts, source_pts):
     # Normalize H and return the matrix
     return H / H[2][2]
 
-def createTopDownVideo(players_list):
+def createTopDownVideo():
+    with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
+        players_list = [eval(line) for line in fin]
+        
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
@@ -276,13 +279,13 @@ def evalMapping():
     
     cv2.imwrite('EvalField1.jpg', img)        
 
-def playerDataToSmoothedTopDown(inputFilePath, outputFilePath):
+def playerDataToSmoothedTopDown(inputFilePath):
     with open(inputFilePath) as fin:
         players_list = [ eval(line) for line in fin ]
         H = getHomographyMatrix()
         smoothedData = detectedPlayers(players_list, H)
         
-    with open(outputFilePath, 'w') as fout:
+    with open(PATH_SMOOTHED_TOP_DOWN_DATA, 'w') as fout:
         for frameData in smoothedData:
             fout.write(str(frameData))
             fout.write("\n")
@@ -420,15 +423,8 @@ def drawOffsetLines(players, img, Hinv):
 
 if __name__ == '__main__':
     # evalMapping()
-    playerDataToSmoothedTopDown("players_1533.txt", PATH_SMOOTHED_TOP_DOWN_DATA)
+    playerDataToSmoothedTopDown("players_1533.txt")
     _, playersPos = getPlayerWiseTopDown()
     #getDistancesWalkedFramewise(playerPos)
     generateHeatmaps(playersPos)
     
-
-    '''
-    with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
-        createTopDownVideo([
-            eval(line) for line in fin
-        ])
-    '''

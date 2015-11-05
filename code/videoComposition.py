@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import copy
 import player_displayer
+from player_detector import Color
 
 def generateVideoComposition(team1Name, team1Color, team2Name, team2Color, playerDistances, mainVideoURI, topDownVideoURI):
     pass
@@ -193,11 +194,11 @@ def getLastFrame(team1Name, team1Color, team2Name, team2Color, playersPos):
 
     return img
 
-def test():
+def createFinalVideo():
     team1Name = "Warriors FC"
     team2Name = "Balestier Khalsa"
-    team1Color = (255,0,0)
-    team2Color = (0,0,255)
+    team1Color = Color.RED
+    team2Color = Color.BLUE
     createMainVideo(team1Name, team1Color, team2Name, team2Color)
     #img = getIntroFrame(team1Name, team1Color, team2Name, team2Color)
     #img = getLastFrame(team1Name, team1Color, team2Name, team2Color)
@@ -205,4 +206,4 @@ def test():
     #cv2.waitKey(0)
     
 if __name__ == '__main__':
-    test()
+    createFinalVideo()
