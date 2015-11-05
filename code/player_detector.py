@@ -24,7 +24,9 @@ HUE_THRESH = 4
 def threshVal(row):
     if row < 175:
         return 100
-    if row < 200:
+    if row < 183:
+        return 20
+    if row < 190:
         return 40
     elif row < 470:
         # 0-1029 -> 11-55
@@ -47,7 +49,7 @@ def areaVal(row):
         # 0-1029 -> 0-2200
         return float(row) / 1029 * 2200
     # 0-1029 -> 0-4300
-    return float(row) / 1029 * 4300
+    return float(row) / 1029 * 3800
 
 # Generates a mask where the area inside the polygon
 # specified by the 4 pts is set to 1, and everything
@@ -228,7 +230,7 @@ def main():
 
 
     # Read each frame
-    for k in range(frame_count):
+    for k in range(0, frame_count, 5):
         frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
 
         # Detect players in frame
@@ -243,7 +245,7 @@ def main():
             cv2.putText(detection_frame, text, (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255))
 
         # Show and save the player detected frame
-        # cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
+        cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
         print "frame", k
 
 def main2():
@@ -280,7 +282,7 @@ def main3():
     frame_count = 7200
     offset = 0
 
-    with open("players_test6.txt", 'w') as fout:
+    with open("players_test7.txt", 'w') as fout:
         # Read each frame
         for k in range(frame_count-offset):
             frame = cv2.imread('../images/stitched_frames/{}.png'.format(k+offset))

@@ -14,16 +14,10 @@ def getInitVideo(team1Name, team1Color, team2Name, team2Color):
     # Header
     cv2.rectangle(img,(0,0),(1920,124), (17,17,17), cv2.cv.CV_FILLED)
    
-    
-    
     cv2.putText(img, team1Name, (720,70), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255)) 
     cv2.putText(img, team2Name, (1060,70), cv2.FONT_HERSHEY_DUPLEX, 1, (255,255,255)) 
     cv2.putText(img, "vs", (940,75), cv2.FONT_HERSHEY_DUPLEX, 2.7, (255,255,255), 3)
     
-    return img
-
-def createMainVideo(team1Name, team1Color, team2Name, team2Color):
-    img = getInitVideo(team1Name, team1Color, team2Name, team2Color)
     # Color Team 1
     cv2.rectangle(img, (680,50),(700,70), team1Color, cv2.cv.CV_FILLED)
     cv2.rectangle(img, (680,50),(700,70), (0,0,0),2)
@@ -31,7 +25,12 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
     cv2.rectangle(img, (1335,50),(1355,70), team2Color, cv2.cv.CV_FILLED)
     cv2.rectangle(img, (1335,50),(1355,70), (0,0,0),2)
     
-     # Left bottom
+    return img
+
+def createMainVideo(team1Name, team1Color, team2Name, team2Color):
+    img = getInitVideo(team1Name, team1Color, team2Name, team2Color)
+    
+    # Left bottom
     cv2.rectangle(img, (0,415),(960,1080), (17,17,17), cv2.cv.CV_FILLED)
     # Left bottom Header
     cv2.rectangle(img, (0,415),(960,505), (37,37,37), cv2.cv.CV_FILLED)
@@ -76,10 +75,10 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
             
     ## for over all frames
     # doublicate init image before writing
+    imgCp = None
     for i in xrange(int(capMain.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
-        if i>=57:
+        if(i>50):
             break
-        
         imgCp = copy.copy(img)
         _, frame = capMain.read()
         
@@ -103,19 +102,94 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
             distance = '{:5.0f}'.format(playersDist[1][p,i]) + " m"
             cv2.putText(imgCp, distance, (690,660+p*30), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,255,255))
             
-        
+        if (i==0):
+            # Add the front page and the transition effect
+            first = getFirstFrame(team1Name, team1Color, team2Name, team2Color)
+            for f in xrange(23):
+                output.write(first)
+            frames = 23
+            width = 960.0
+            pxPerFrame = width/frames
+            # Move the halfes of the front image to the sides
+            for f in xrange(frames):
+                base = copy.copy(imgCp)
+                base[:,0:int((frames-f)*pxPerFrame),:] = first[:,960-int((frames-f)*pxPerFrame):960,:]
+                base[:,960+int((f)*pxPerFrame):,:] = first[:,960:1920-int((f)*pxPerFrame),:]
+                output.write(base)
+                
         output.write(imgCp)
         
     #cv2.imshow("img", resized_image)
     #cv2.imwrite("img.jpg", imgCp)
     
+    # Wait 5 more frames before blending
+    for i in xrange(5):
+        output.write(imgCp)
+        
+    black = np.zeros_like(imgCp, np.uint8)
+    frames = 12
+    
+    # Fade to black
+    for i in xrange(frames):
+        output.write(cv2.addWeighted(imgCp,(frames-i)/46.0,black,i/46.0,0))
+    
+    # Fade to end frame
+    finalImg = getLastFrame(team1Name, team1Color, team2Name, team2Color, playersPos)
+    for i in xrange(frames):
+        output.write(cv2.addWeighted(black,(frames-i)/46.0,finalImg,i/46.0,0))
+    
+    # Show the final frame for 1 second
+    for i in xrange(46):
+        output.write(finalImg)
+    
     capMain.release()
     capTopDown.release()
     output.release()
-        
 
-def generateLastFrame():
-    pass
+def getFirstFrame(team1Name, team1Color, team2Name, team2Color):
+    img = np.zeros((1080,1920,3), np.uint8)
+    
+    cv2.rectangle(img, (0,0),(960,1080), (13,13,13), cv2.cv.CV_FILLED)
+    
+    # (x,y)
+    cv2.putText(img, team1Name, (300,280), cv2.FONT_HERSHEY_DUPLEX, 3, (255,255,255),3) 
+    cv2.putText(img, team2Name, (980,560), cv2.FONT_HERSHEY_DUPLEX, 3, (255,255,255),3) 
+    cv2.putText(img, "vs", (875,420), cv2.FONT_HERSHEY_DUPLEX, 5, (255,255,255), 7)
+    
+    # Color Team 1
+    cv2.rectangle(img, (170,200),(270,300), team1Color, cv2.cv.CV_FILLED)
+    cv2.rectangle(img, (170,200),(270,300), (0,0,0),2)
+    # Color Team 2
+    cv2.rectangle(img, (1780,480),(1880,580), team2Color, cv2.cv.CV_FILLED)
+    cv2.rectangle(img, (1780,480),(1880,580), (0,0,0),2)
+    
+    subtitle = "Analysis by Charles, Dennis, Larry, and Yujian"
+    cv2.putText(img, subtitle, (200,880), cv2.FONT_HERSHEY_DUPLEX, 2, (255,255,255),3) 
+    return img        
+
+def getLastFrame(team1Name, team1Color, team2Name, team2Color, playersPos):
+    img = getInitVideo(team1Name, team1Color, team2Name, team2Color)
+    
+    cv2.rectangle(img, (0,124),(960,1080), (13,13,13), cv2.cv.CV_FILLED)
+    
+    # Write player names (if the would change during the game, this needs to be done for each frame!)
+    ## First team 1
+    
+    for t in xrange(2):
+        for i in xrange(playersPos[t].shape[0]):
+            row = i / 3 # 3 Elements per row
+            col = i % 3
+            name = "Player" + str(i+1) + ""
+            
+            heatmapPath = '../images/heatmap_team'+str(t)+'/team'+str(t)+'_player' + str(i) + '.png'
+            heatmap = cv2.imread(heatmapPath)
+            resized_image = cv2.resize(heatmap, (230, 164))
+            
+            cv2.putText(img, name, (t*960+90+col*(230+45)+60,124+50+row*(65+164)), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,255,255))
+            img[124+65+row*(65+164):124+65+164+row*(65+164),t*960+90+col*(230+45):t*960+90+230+col*(230+45)] = resized_image
+            #cv2.putText(img, name, (150,660+i*30), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255,255,255))
+
+    return img
 
 def test():
     team1Name = "Warriors FC"
@@ -123,7 +197,10 @@ def test():
     team1Color = (255,0,0)
     team2Color = (0,0,255)
     createMainVideo(team1Name, team1Color, team2Name, team2Color)
-    
+    #img = getFirstFrame(team1Name, team1Color, team2Name, team2Color)
+    #img = getLastFrame(team1Name, team1Color, team2Name, team2Color)
+    #cv2.imwrite("first.jpg", img)
+    #cv2.waitKey(0)
     
 if __name__ == '__main__':
     test()

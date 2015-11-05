@@ -391,7 +391,6 @@ def drawOffsetLines(players, img, Hinv):
     # Left = small number
     if teamLeft_mostLeft > teamRight_mostLeft and teamRight_mostLeft < WIDTH_TD_IMG/2:
         # Offside on the left
-        print "offside!!!"
         # Get coords of the line
         #Hinv = np.linalg.inv(H)
         topPt = getInverseTransformationCoords(Hinv,BORDER,teamLeft_mostLeft)
@@ -406,7 +405,6 @@ def drawOffsetLines(players, img, Hinv):
     # and this player is on the right players half (right = large number)  
     if teamLeft_mostRight > teamRight_mostRight and teamLeft_mostRight > WIDTH_TD_IMG/2:
         # Offside on the right
-        print "offside!!!"
         # Get coords of the line
         #Hinv = np.linalg.inv(H)
         topPt = getInverseTransformationCoords(Hinv,BORDER,teamRight_mostRight)
