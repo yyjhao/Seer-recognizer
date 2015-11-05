@@ -62,6 +62,8 @@ def test():
 
     #del cap
 
+    print pt.big_jumps
+
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
     for i in range(NUM_SKIP):
         cap.grab()
@@ -122,6 +124,9 @@ class PlayerTracker(object):
         # The last frame with tracked data.
         self.last_frame = 0
 
+        # XXX DEBUG
+        self.big_jumps = {}
+
     def feed_rectangles(self, player_list):
         """ Give the player tracker the next frame's player detection data,
         in the form of a list of detected player rectangles.
@@ -162,6 +167,10 @@ class PlayerTracker(object):
         # Map each player to some point in the detection data,
         # or handle detection failures appropriately.
 
+        # A hashset of players to queue for extrapolation.
+        # We will try to re-match with a larger radius around
+        # unclaimed rectangles before actually extrapolating.
+        to_extrapolate = {}
         for player in self.players:
             last_frame_pos = player.centroids[self.last_frame]
             team_detections = [
@@ -225,12 +234,13 @@ class PlayerTracker(object):
                             if dist < lowest_dist:
                                 player_detection = detection
                                 lowest_dist = dist
-                        if lowest_dist > player.search_radius:
+                        # if lowest_dist > player.search_radius:
+                        if lowest_dist > 15:
                             player_detection = None
 
             if player_detection is None:
                 # Now just extrapolate.
-                player.extrapolate_next_location()
+                to_extrapolate[player] = None
             else:
                 # Register the tracking.
                 player_detection.claimers[player] = None
@@ -239,6 +249,22 @@ class PlayerTracker(object):
             # XXX also write finalizer
 
         # -- Attempt to resolve collisions in this frame. --
+        # For each unclaimed detection, try to match it to a colliding player:
+        #   - Find the nearest collision.
+        #   - Check that it's in a radius (distance from detection centroid to
+        #     collision rectangle outer edge).
+        #   - Check that this color is the color of a player in the collision.
+        #   - Remove the nearest player of this color from the collision.
+
+        # XXX: trying out moving this to various locations
+        # Ignore exact but incorrect-color matches; extrapolate instead.
+        for detection in detections:
+            if len(detection.claimers) == 1:
+                player = [x for x in detection.claimers][0]
+                if player.color != detection.color:
+                    del detection.claimers[player]
+                    to_extrapolate[player] = None
+
         list_of_collisions = [
             (i, detection) for i, detection in enumerate(detections)
             if len(detection.claimers) > 1
@@ -247,17 +273,16 @@ class PlayerTracker(object):
             (i, detection) for i, detection in enumerate(detections)
             if len(detection.claimers) == 0
         ]
-        # For each unclaimed detection, try to match it to a colliding player:
-        #   - Find the nearest collision.
-        #   - Check that it's in a radius (distance from detection centroid to
-        #     collision rectangle outer edge).
-        #   - Check that this color is the color of a player in the collision.
-        #   - Remove the nearest player of this color from the collision.
-
         for i, unclaimed in list_of_unclaimed:
             min_dist = 999999
             nearest_player = None
             selected_collision = None
+            for player in to_extrapolate:
+                dist = dist_point_to_rect(player.centroids[self.last_frame], unclaimed.rectangle)
+                if dist > player.search_radius: continue
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_player = player
             for j, collision in list_of_collisions:
                 # We resolve collisions during the loop, so we should skip
                 # if this has already been resolved.
@@ -275,18 +300,16 @@ class PlayerTracker(object):
                         nearest_player = player
                         selected_collision = collision
             if nearest_player is not None:
+                if min_dist > 75:
+                    if self.last_frame + 1 not in self.big_jumps:
+                        self.big_jumps[self.last_frame + 1] = []
+                    self.big_jumps[self.last_frame + 1].append((nearest_player.pid, min_dist))
                 unclaimed.claimers[nearest_player] = None
-                del selected_collision.claimers[nearest_player]
+                if selected_collision is not None:
+                    del selected_collision.claimers[nearest_player]
+                else:
+                    del to_extrapolate[nearest_player]
                 break
-
-        # XXX: trying out moving this to various locations
-        # Ignore exact but incorrect-color matches; extrapolate instead.
-        for detection in detections:
-            if len(detection.claimers) == 1:
-                player = [x for x in detection.claimers][0]
-                if player.color != detection.color:
-                    del detection.claimers[player]
-                    player.extrapolate_next_location()
 
         # Now save all detections.
         for detection in detections:
@@ -299,6 +322,9 @@ class PlayerTracker(object):
                 else:
                     player.set_next_location(
                         detection.centroid, detection.rectangle)
+
+        for player in to_extrapolate:
+            player.extrapolate_next_location()
 
         self.last_frame += 1
 
@@ -442,13 +468,8 @@ class Player(object):
         self.raw_positions.append((
             int(extrapolated_position[0]),
             int(extrapolated_position[1] + (2 * y_padding))))
-        # Only increment search radius if this is not a collision.
-        # We will rely on aggressive collision resolution from unclaimed
-        # detections to resolve detections when this player has strayed
-        # far from their extrapolated location.
-        if bounds is None:
-            self._increment_search_radius()
-        # No harm to increment resolution radius as well.
+
+        self._increment_search_radius()
         self._increment_resolution_radius()
 
     def backfill_unfinished_frames(self, fno):
@@ -519,7 +540,7 @@ class Player(object):
         self.search_radius = 20  # Maybe need to tweak.
 
     def _reset_resolution_radius(self):
-        self.resolution_radius = 100
+        self.resolution_radius = 50
 
     def _increment_search_radius(self, val=3):
         self.search_radius += val
