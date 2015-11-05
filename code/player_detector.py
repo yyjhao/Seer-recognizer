@@ -305,5 +305,34 @@ def main3():
             fout.write("\n")
             print "frame", k+offset
 
+def generateVideoWithRect(inputVideoPath, inputPlayerPath, outputVideoPath):
+    with open(inputPlayerPath) as fin:
+        players_list = [ eval(line) for line in fin ]
+        
+    # Read each frame
+    cap = cv2.VideoCapture('../videos/stitched.mpeg')
+    fps = int(cap.get(cv2.cv.CV_CAP_PROP_FPS))
+    movie_shape = (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+    fourcc = cv2.cv.CV_FOURCC(*"MPEG")
+    output = cv2.VideoWriter(outputVideoPath, fourcc, fps, movie_shape)
+    
+    for i in xrange(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
+        if i > 60:
+            break
+        _, frame = cap.read()
+
+        for player in players_list[i]:
+            x, y, w, h = player[0]
+            color = player[1]
+            # Draw the bounding rectangle around each detected player
+            cv2.rectangle(frame, (x,y), (x+w,y+h), color, 3)
+
+        # Show and save the player detected frame
+        output.write(frame)
+        print "frame", i
+        
+    output.release()
+    cap.release()
+    
 if __name__ == "__main__":
     main3()

@@ -37,6 +37,13 @@ def testMask():
 
     cv2.imwrite('../images/mask.png', img*mask)
 
+def deleteFirstNLines(inputFilePath, outputFilePath, lines):
+    with open(inputFilePath,'r') as f:
+        with open(outputFilePath,'w') as f1:
+            for i, line in enumerate(f):
+                if i >= lines:
+                    f1.write(line)
+            
 def rect_centroid(rect):
     """ Given a rectangle defined by rect = (x, y, w, h),
     return the nearest-int location of its centroid, as a tuple (x, y).

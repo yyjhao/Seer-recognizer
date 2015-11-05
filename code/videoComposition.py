@@ -70,16 +70,14 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
     H = player_displayer.getHomographyMatrix()
     Hinv = np.linalg.inv(H)
     
-    ## Skip first 3 frames of the main video:
-    #for i in xrange(3):
-    #    _, frame = capMain.read()
+    ## Skip first 4 frames of the main video:
+    for i in xrange(4):
+        _, frame = capMain.read()
             
     ## for over all frames
     # doublicate init image before writing
     imgCp = None
-    for i in xrange(int(capMain.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
-        if(i>50):
-            break
+    for i in xrange(int(capMain.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))-4):
         imgCp = copy.copy(img)
         _, frame = capMain.read()
         
