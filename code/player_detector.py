@@ -2,9 +2,10 @@ import numpy as np
 import cv2
 
 # Read background image
-# BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
-BACKGROUND_IMG = cv2.imread('../images/background2.png')
+BACKGROUND_IMG = cv2.imread('../images/stitched_background.png')
+# BACKGROUND_IMG = cv2.imread('../images/background2.png')
 BACKGROUND_IMG_HSV = np.float32(cv2.cvtColor(BACKGROUND_IMG, cv2.COLOR_BGR2HSV))
+BACKGROUND_IMG_LAB = np.float32(cv2.cvtColor(BACKGROUND_IMG, cv2.COLOR_BGR2LAB))
 
 class Color(object):
     BLUE  = (255, 0, 0)
@@ -16,15 +17,17 @@ class Color(object):
 # Shadow removal parameters
 VALUE_LOW_THRESH = 0.4
 VALUE_HIGH_THRESH = 0.95
-SATURATION_THRESH = 70
+SATURATION_THRESH = 60
 HUE_THRESH = 4
 
 # Several linear scaled threshold values based on row
 def threshVal(row):
     if row < 175:
-        return 70
-    if row < 200:
-        return 28
+        return 100
+    if row < 183:
+        return 20
+    if row < 187:
+        return 40
     elif row < 470:
         # 0-1029 -> 11-55
         return float(row) / 1029 * 44 + 11
@@ -46,7 +49,7 @@ def areaVal(row):
         # 0-1029 -> 0-2200
         return float(row) / 1029 * 2200
     # 0-1029 -> 0-4300
-    return float(row) / 1029 * 4300
+    return float(row) / 1029 * 3800
 
 # Generates a mask where the area inside the polygon
 # specified by the 4 pts is set to 1, and everything
@@ -70,10 +73,20 @@ FIELD_MASK = generateMask(FIELD_PTS)
 # CUZ THE BLUE GOALIE IS A NINJA
 BLUE_GOALIE_PTS = np.array(
     [[5240, 267],
-    [5840, 267],
-    [5840, 400],
+    [5940, 267],
+    [5940, 400],
     [5240, 400]])
 BLUE_GOALIE_MASK = generateMask(BLUE_GOALIE_PTS).astype('bool')
+
+# The field has darker shadows in this part of the field
+SHADOW_PTS = np.array(
+    [[3200, 190],
+    [5030, 178],
+    [9550, 1100],
+    [-500, 1100],
+    [1512, 504],
+    [2576, 504]])
+SHADOW_MASK = generateMask(SHADOW_PTS).astype('bool')
 
 # Filter out contours that:
 #   1. Are too small
@@ -84,6 +97,8 @@ def contourFilter(contour_bound):
     check = w * h > areaVal(y + h) \
                     and float(w) / h < 2.4 \
                     and FIELD_MASK[y + h, x + w / 2] != 0
+    if BLUE_GOALIE_MASK[y + h, x + w / 2]:
+        check = check and w * h > 1050
     return check
 
 # Creates a mask where all shadows identified in the given frame
@@ -98,8 +113,7 @@ def shadowMask(frame_hsv):
     mask = np.logical_and(VALUE_LOW_THRESH <= value, value <= VALUE_HIGH_THRESH)
     mask = np.logical_and(saturation <= SATURATION_THRESH, mask)
     mask = np.logical_and(hue <= HUE_THRESH, mask)
-    mask[:,:3000] = False
-    mask[:,5720:] = False
+    mask = np.logical_and(mask, SHADOW_MASK)
     return mask
 
 # Detects all players in the frame, returning a list of tuples containing the
@@ -108,13 +122,13 @@ def getPlayers(frame):
     # Convert frame to HSV
     frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     frame_hue = frame_hsv[:,:,0]
+    frame_value = frame_hsv[:,:,2]
 
     # Convert frame and background to Lab in order to calculate the Delta E
     # color difference according to the CIE76 formula
     # Reference: https://en.wikipedia.org/wiki/Color_difference
     frame_lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-    bg_lab = cv2.cvtColor(BACKGROUND_IMG, cv2.COLOR_BGR2LAB)
-    lab_diff_squared = np.square(np.float32(frame_lab) - np.float32(bg_lab))
+    lab_diff_squared = np.square(np.float32(frame_lab) - BACKGROUND_IMG_LAB)
     delta_E = np.sqrt(np.sum(lab_diff_squared, axis=2))
 
     # Normalize the Delta E difference to a value between 0-255
@@ -127,14 +141,16 @@ def getPlayers(frame):
     thresh_vals = np.zeros(delta_E.shape)
     for row in range(thresh_vals.shape[0]):
         thresh_vals[row,:] = threshVal(row)
-    thresh_vals[BLUE_GOALIE_MASK] = 12
+    thresh_vals[BLUE_GOALIE_MASK] = 10
     binary_frame = np.zeros(delta_E.shape, 'uint8')
     binary_frame[delta_E > thresh_vals] = 255
+    # cv2.imwrite('../images/player_detection/binaries/{}.png'.format(k), binary_frame)
     binary_frame[shadowMask(frame_hsv)] = 0
+    # cv2.imwrite('../images/player_detection/shadow_removed/{}.png'.format(k), binary_frame)
 
     # Find all outer contours in the binary image
     contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
-                                                                 cv2.CHAIN_APPROX_SIMPLE)
+                                   cv2.CHAIN_APPROX_SIMPLE)
 
     # Filter out contours that are not players on the field
     contour_bounds = [(c, cv2.boundingRect(c)) for c in contours]
@@ -145,22 +161,36 @@ def getPlayers(frame):
     for cb in contour_bounds:
         contour = cb[0]
         bounding_rect = cb[1]
+        for pt in contour:
+            pt[0][0] = pt[0][0] - bounding_rect[0]
+            pt[0][1] = pt[0][1] - bounding_rect[1]
 
         # Create a mask where the contour interiors are set to 255,
         # and all other values are 0. Use the mask to grab all hue
-        # values within the contour.
-        mask = np.zeros(binary_frame.shape).astype('uint8')
+        # and values within the contour.
+        mask = np.zeros([bounding_rect[3],bounding_rect[2]]).astype('uint8')
         cv2.drawContours(mask, [contour], 0, 255, -1)
-        hues = frame_hue[np.nonzero(mask)]
+        indices = np.nonzero(mask)
+        shifted_indices = (indices[0]+bounding_rect[1],indices[1]+bounding_rect[0])
+        hues = frame_hue[shifted_indices]
         shifted_hues = np.remainder(hues + 10, 180)
+        values = frame_value[shifted_indices]
 
-        # Calculate statistics for hue of all the pixels within the contour
+        # Calculate statistics for hue/value of all pixels within the contour
         mean_hue = np.mean(shifted_hues)
+        mean_value = np.mean(values)
 
-        # Determine the player color based on hue statistics and position
-        if mean_hue > 60:
+        # Determine the player color based on hue/value statistics
+        if mean_hue > 65:
             # blue player
             color = Color.BLUE
+        elif mean_hue > 53:
+            if mean_value > 110:
+                # goalies and referee
+                color = Color.GREEN
+            else:
+                # blue player
+                color = Color.BLUE
         elif mean_hue < 35:
             # red player
             color = Color.RED
@@ -170,7 +200,7 @@ def getPlayers(frame):
 
         # Append the player bounding rectangle and color to the list
         if color != Color.GREEN or bounding_rect[1] < 800:
-            player = [bounding_rect, color]
+            player = [bounding_rect, color, mean_hue, mean_value]
             players.append(player)
 
     # Rightmost green player is blue goalie and
@@ -180,6 +210,14 @@ def getPlayers(frame):
     sorted_green_players = sorted(green_players, key=getX)
     sorted_green_players[0][1] = Color.RED_GOALIE
     sorted_green_players[-1][1] = Color.BLUE_GOALIE
+
+    # contours = [cb[0] for cb in contour_bounds]
+    # contour_frame = np.zeros(frame.shape)
+    # contour_frame[:,:,0] = delta_E
+    # contour_frame[:,:,1] = delta_E
+    # contour_frame[:,:,2] = delta_E
+    # cv2.drawContours(contour_frame, contours, -1, (0, 255, 0), 1)
+    # cv2.imwrite('../images/player_detection/contours/{}.png'.format(k), contour_frame)
 
     return players
 
@@ -193,20 +231,22 @@ def main():
 
     # Read each frame
     for k in range(frame_count):
-        frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
+        frame = cv2.imread('../images/stitched_frames/{}.png'.format(k+1230))
 
         # Detect players in frame
-        players = getPlayers(frame)
+        players = getPlayers(frame, k+1230)
         detection_frame = frame.copy()
         for player in players:
             x, y, w, h = player[0]
             color = player[1]
             # Draw the bounding rectangle around each detected player
             cv2.rectangle(detection_frame, (x,y), (x+w,y+h), color, 1)
+            text = "{}, {}, {}, {:.2f}, {}, {}".format(x, y, w * h, float(w) / h, int(player[2]), int(player[3]))
+            cv2.putText(detection_frame, text, (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255))
 
         # Show and save the player detected frame
-        cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
-        print "frame", k
+        cv2.imwrite('../images/player_detection/detections/{}.png'.format(k+1230), detection_frame)
+        print "frame", k+1230
 
 def main2():
     frame_count = 7200
@@ -238,10 +278,32 @@ def main2():
             # Show and save the player detected frame
             print "frame", k
 
+def main3():
+    frame_count = 7200
+    offset = 0
+
+    with open("players_test7.txt", 'w') as fout:
+        # Read each frame
+        for k in range(frame_count-offset):
+            frame = cv2.imread('../images/stitched_frames/{}.png'.format(k+offset))
+
+            # Detect players in frame
+            players = getPlayers(frame)
+            # detection_frame = frame.copy()
+            # for player in players:
+            #     x, y, w, h = player[0]
+            #     color = player[1]
+            #     # Draw the bounding rectangle around each detected player
+            #     cv2.rectangle(detection_frame, (x,y), (x+w,y+h), color, 1)
+            #     text = "{}, {}, {}, {:.2f}, {}, {}".format(x, y, w * h, float(w) / h, int(player[2]), int(player[3]))
+            #     cv2.putText(detection_frame, text, (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255))
+
+            # Show and save the player detected frame
+            # cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
+            p = [(pl[0], pl[1]) for pl in players]
+            fout.write(str(p))
+            fout.write("\n")
+            print "frame", k+offset
 
 if __name__ == "__main__":
-    main2()
-    main()
-
-if __name__ == "__main__":
-    main()
+    main3()
