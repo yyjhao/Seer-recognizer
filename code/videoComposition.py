@@ -104,7 +104,7 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
             
         if (i==0):
             # Add the front page and the transition effect
-            first = getFirstFrame(team1Name, team1Color, team2Name, team2Color)
+            first = getIntroFrame(team1Name, team1Color, team2Name, team2Color)
             for f in xrange(23):
                 output.write(first)
             frames = 23
@@ -146,7 +146,7 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
     capTopDown.release()
     output.release()
 
-def getFirstFrame(team1Name, team1Color, team2Name, team2Color):
+def getIntroFrame(team1Name, team1Color, team2Name, team2Color):
     img = np.zeros((1080,1920,3), np.uint8)
     
     cv2.rectangle(img, (0,0),(960,1080), (13,13,13), cv2.cv.CV_FILLED)
@@ -163,8 +163,10 @@ def getFirstFrame(team1Name, team1Color, team2Name, team2Color):
     cv2.rectangle(img, (1780,480),(1880,580), team2Color, cv2.cv.CV_FILLED)
     cv2.rectangle(img, (1780,480),(1880,580), (0,0,0),2)
     
-    subtitle = "Analysis by Charles, Dennis, Larry, and Yujian"
-    cv2.putText(img, subtitle, (200,880), cv2.FONT_HERSHEY_DUPLEX, 2, (255,255,255),3) 
+    subtitle1 = "Computer Vision Based Football Game Analysis"
+    subtitle2= "by Charles L., Dennis S., Larry X., and Yujian Y."
+    cv2.putText(img, subtitle1, (200,850), cv2.FONT_HERSHEY_DUPLEX, 2, (255,255,255),3) 
+    cv2.putText(img, subtitle2, (300,920), cv2.FONT_HERSHEY_DUPLEX, 1.6, (255,255,255),3)
     return img        
 
 def getLastFrame(team1Name, team1Color, team2Name, team2Color, playersPos):
@@ -197,7 +199,7 @@ def test():
     team1Color = (255,0,0)
     team2Color = (0,0,255)
     createMainVideo(team1Name, team1Color, team2Name, team2Color)
-    #img = getFirstFrame(team1Name, team1Color, team2Name, team2Color)
+    #img = getIntroFrame(team1Name, team1Color, team2Name, team2Color)
     #img = getLastFrame(team1Name, team1Color, team2Name, team2Color)
     #cv2.imwrite("first.jpg", img)
     #cv2.waitKey(0)
