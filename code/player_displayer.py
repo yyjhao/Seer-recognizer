@@ -148,7 +148,7 @@ def detectedPlayers(players_list, H):
         tracker.feed_rectangles(p)
     r = [[] for i in players_list]
     player_points = [
-        smooth([project_point(point, H) for point in p.raw_positions])
+        smooth([bound_point(project_point(point, H)) for point in p.raw_positions])
         for p in tracker.players
     ]
     for p, points in zip(tracker.players, player_points):
@@ -163,6 +163,9 @@ def project_point(point, H):
     col = point[0]
     a = getTransformationCoords(H, [row, col])
     return (a[1], a[0])
+
+def bound_point(point):
+    return (point[0], max(point[1], BORDER))
 
 
 def smooth_num(num_list):

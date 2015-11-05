@@ -26,7 +26,7 @@ def threshVal(row):
         return 100
     if row < 183:
         return 20
-    if row < 187:
+    if row < 190:
         return 40
     elif row < 470:
         # 0-1029 -> 11-55
@@ -230,11 +230,11 @@ def main():
 
 
     # Read each frame
-    for k in range(frame_count):
-        frame = cv2.imread('../images/stitched_frames/{}.png'.format(k+1230))
+    for k in range(0, frame_count, 5):
+        frame = cv2.imread('../images/stitched_frames/{}.png'.format(k))
 
         # Detect players in frame
-        players = getPlayers(frame, k+1230)
+        players = getPlayers(frame, k)
         detection_frame = frame.copy()
         for player in players:
             x, y, w, h = player[0]
@@ -245,8 +245,8 @@ def main():
             cv2.putText(detection_frame, text, (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255))
 
         # Show and save the player detected frame
-        cv2.imwrite('../images/player_detection/detections/{}.png'.format(k+1230), detection_frame)
-        print "frame", k+1230
+        cv2.imwrite('../images/player_detection/detections/{}.png'.format(k), detection_frame)
+        print "frame", k
 
 def main2():
     frame_count = 7200
