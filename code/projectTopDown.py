@@ -6,10 +6,10 @@ import numpy as np
 import copy
 from player_detector import getPlayers
 
-BORDER = 50
+BORDER = 100
 PATH_TOP_DOWN_IMG = '../images/FootballField_small_border.png'
-WIDTH_TD_IMG = 1300
-HEIGHT_TD_IMG = 900
+WIDTH_TD_IMG = 1400
+HEIGHT_TD_IMG = 1000
 
 # Dimensions of the field in m without borders
 FIELD_HEIGHT = 70.0

@@ -1,8 +1,11 @@
 *.pyc
+*.psd
 videos/
 images/player_detection/*
 images/stitched_frames/*
 images/player_tracking/*
+images/heatmap_team0
+images/heatmap_team1
 !images/player_tracking/.syncfolder
 
 # Ignore temp output in the code folder

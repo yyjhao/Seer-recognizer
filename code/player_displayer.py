@@ -4,7 +4,9 @@ Generates a video based on player.txt
 import cv2
 import numpy as np
 import copy
+import heatmap
 from player_tracker import PlayerTracker
+from player_detector import Color
 
 PATH_SMOOTHED_TOP_DOWN_DATA = "players_smoothedTopDown.txt"
 
@@ -290,10 +292,155 @@ def playerDataToSmoothedTopDown(inputFilePath, outputFilePath):
             fout.write(str(frameData))
             fout.write("\n")
 
+def getPlayerWiseTopDown():
+    with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
+        framewiseData = [eval(line) for line in fin]
+        
+        # Create dict matching players to array id
+        
+        # Playerwise Data
+        # Team (Referee, Red, Blue), Playerpositions
+        playersPerTeam = np.zeros(2)
+        for player in framewiseData[0]:  # # Use frame 5
+            if player[1] == Color.RED or player[1] == Color.RED_GOALIE:
+                playersPerTeam[0] += 1
+            elif player[1] == Color.BLUE or player[1] == Color.BLUE_GOALIE:
+                playersPerTeam[1] += 1
+                    
+        playerwisePositions = np.zeros((playersPerTeam[0], len(framewiseData), 2)), np.zeros((playersPerTeam[1], len(framewiseData), 2))
+        # 0 = referee
+        # 1 = red
+        # 2 = blue
+        for i, frame in enumerate(framewiseData):
+            # Sample player data: ((852, 665), (0, 0, 255), '1')
+            # 0: position
+            # 1: color
+            # 2: id for color
+            for player in frame:
+                if player[1] == Color.RED:
+                    playerwisePositions[0][int(player[2]), i, :] = player[0][::-1]
+                elif player[1] == Color.RED_GOALIE:
+                    playerwisePositions[0][int(player[2]) - 1, i, :] = player[0][::-1]
+                elif player[1] == Color.BLUE: 
+                    playerwisePositions[1][int(player[2]), i, :] = player[0][::-1]
+                elif player[1] == Color.BLUE_GOALIE:
+                    playerwisePositions[1][int(player[2]) - 1, i, :] = player[0][::-1]
+        
+    return framewiseData, playerwisePositions
+
+'''
+    Generates the distances each player walked
+'''
+def getDistancesWalkedFramewise(playerPos):
+    playerDist = np.zeros((playerPos[0].shape[0], playerPos[0].shape[1])), np.zeros((playerPos[1].shape[0], playerPos[1].shape[1]))
+    for t, team in enumerate(playerPos):
+        for p, player in enumerate(team):
+            for i in xrange(1,player.shape[0]):
+                playerDist[t][p,i] = distanceBetweenCoordsTopDown(player[i-1], player[i]) + playerDist[t][p,i-1]
+                
+    return playerDist
+
+def getHeatmaps(playerPos):
+    heatmaps = []
+    for t, team in enumerate(playerPos):
+        teammaps = []
+        for p, player in enumerate(team):
+            print "Generate Heatmaps for team "+str(t)+" player "+str(p)
+            cv2.imwrite("../images/team"+str(t)+"_player"+str(p)+".png", heatmap.getFieldHeatmap(player))
+            #teammaps.append(heatmap.getFieldHeatmap(player))
+        
+        #heatmaps.append(teammaps)
+        #break
+    
+    return heatmaps
+
+'''
+    Parameters:
+        players: The framewise player data, with (x,y) coordinates
+'''
+def drawOffsetLines(players, img, Hinv):
+    # blue is on the right side
+    # red is on the left side (defined by user)
+    # Colors of players on the left and right side - goalies should have a slightly other color!
+    left = Color.RED
+    right = Color.BLUE
+    teamLeft_mostLeft = 9999999
+    teamLeft_mostRight = -1
+    teamRight_mostLeft = 9999999
+    teamRight_mostRight = -1
+    
+    for player in players:
+        if player[1] == left:
+            if player[0][0] < teamLeft_mostLeft:
+                teamLeft_mostLeft = player[0][0]
+            if player[0][0] > teamLeft_mostRight:
+                teamLeft_mostRight = player[0][0]
+        elif player[1] == right:
+            if player[0][0] < teamRight_mostLeft:
+                teamRight_mostLeft = player[0][0]
+            if player[0][0] > teamRight_mostRight:
+                teamRight_mostRight = player[0][0]
+            
+            
+    imgLeftLine = None
+    imgRightLine = None
+    
+    # Left = small number
+    if teamLeft_mostLeft > teamRight_mostLeft and teamRight_mostLeft < WIDTH_TD_IMG/2:
+        # Offside on the left
+        print "offside!!!"
+        # Get coords of the line
+        #Hinv = np.linalg.inv(H)
+        topPt = getInverseTransformationCoords(Hinv,BORDER,teamLeft_mostLeft)
+        bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamLeft_mostLeft)
+        
+        # Blend the new line, such that it is transparent
+        imgLeftLine = copy.copy(img) 
+        cv2.line(imgLeftLine, (topPt[1],topPt[0]), (bottomPt[1],bottomPt[0]),(0,0,255),10)
+        
+        
+    # If there is a player from the left team more right than any player from team right
+    # and this player is on the right players half (right = large number)  
+    if teamLeft_mostRight > teamRight_mostRight and teamLeft_mostRight > WIDTH_TD_IMG/2:
+        # Offside on the right
+        print "offside!!!"
+        # Get coords of the line
+        #Hinv = np.linalg.inv(H)
+        topPt = getInverseTransformationCoords(Hinv,BORDER,teamRight_mostRight)
+        bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamRight_mostRight)
+
+        # Blend the new line, such that it is transparent
+        imgRightLine = copy.copy(img) 
+        cv2.line(imgRightLine, (topPt[1],topPt[0]), (bottomPt[1],bottomPt[0]),(0,0,255),10)
+        
+    # Mostlikely therefore the first one 
+    if imgRightLine is None and imgLeftLine is None:
+        return img
+    
+    if imgRightLine is not None and imgLeftLine is not None:
+        img = cv2.addWeighted(img,0.33333,imgRightLine,0.66667,0)
+        return cv2.addWeighted(img,0.6,imgLeftLine,0.4,0)
+    
+    if imgRightLine is not None:
+        return cv2.addWeighted(img,0.6,imgRightLine,0.4,0)
+    
+    #if imgLeftLine is not None:
+    return cv2.addWeighted(img,0.6,imgLeftLine,0.4,0)
+    
+    #return img
+
 if __name__ == '__main__':
     # evalMapping()
     playerDataToSmoothedTopDown("players_1533.txt", PATH_SMOOTHED_TOP_DOWN_DATA)
-    
+    #framewisePos, playersPos = getPlayerWiseTopDown()
+    #getDistancesWalkedFramewise(playerPos)
+    #heatmaps = getHeatmaps(playerPos)
+    '''
+    for t, team in enumerate(heatmaps):
+        for p, player in enumerate(team):
+            cv2.imwrite("../images/team"+str(t)+"_player"+str(p)+".png", player)
+    '''
+
     '''
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
         createTopDownVideo([
