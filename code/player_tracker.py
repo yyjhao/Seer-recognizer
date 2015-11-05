@@ -37,28 +37,30 @@ from util import (
 )
 
 def test():
-    if len(sys.argv) != 2:
-        print "Usage: python %s <num_frames>" % sys.argv[0]
+    if len(sys.argv) != 3:
+        print "Usage: python %s <start_frame> <num_frames>" % sys.argv[0]
         sys.exit()
-    NUM_FRAMES = int(sys.argv[1])
+    NUM_SKIP = int(sys.argv[1])
+    NUM_FRAMES = int(sys.argv[2])
 
-    cap = cv2.VideoCapture('../videos/stitched.mpeg')
-    NUM_SKIP = 2
-    for i in range(NUM_SKIP):
-        _, _ = cap.read()
-    _, frame = cap.read()
-    players = getPlayers(frame)
-    pt = PlayerTracker(players)
-    print "Processed frame 0."
-    i = 1
-    while i < NUM_FRAMES:
-        _, frame = cap.read()
-        rects = getPlayers(frame)
-        pt.feed_rectangles(rects)
-        print "Processed frame %r." % i
-        i += 1
+    with open("players_test3.txt") as fin:
+        playersList = (eval(line) for line in fin)
+        # XXX: no need to skip after next pull!
 
-    del cap
+    # cap = cv2.VideoCapture('../videos/stitched.mpeg')
+        for i in range(NUM_SKIP):
+            _ = playersList.next()
+        players = playersList.next()
+        pt = PlayerTracker(players)
+        print "Processed frame 0."
+        i = 1
+        while i < NUM_FRAMES:
+            rects = playersList.next()
+            pt.feed_rectangles(rects)
+            print "Processed frame %r." % i
+            i += 1
+
+    #del cap
 
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
     for i in range(NUM_SKIP):
@@ -429,16 +431,17 @@ class Player(object):
         # Rectangles are (x, y, width, height). Top left is 0, 0.
         self.rectangles = []
 
-        # -- Fields that are mandatory for every finished frame. --
-
         # A list of the player's ground positions, on the raw video,
-        # in frame order.
+        # in frame order, or None if extrapolated.
+        # Must eventually be filled in.
         # Position represented by a tuple (x, y) of ints.
         # This is what we really need tracking to produce. Applying homography
         # to get top-down coordinates is trivial.
         # TODO: decide how to calculate these from raw position data.
         # We probably don't have to do this on the fly.
         self.raw_positions = []
+
+        # -- Fields that are mandatory for every finished frame. --
 
         # The moving average of the last five centroids. We use the *direction*
         # of the moving average to extrapolate the direction of the player.
@@ -453,18 +456,18 @@ class Player(object):
         """
         self.centroids.append(centroid)
         self.rectangles.append(rectangle)
-        # Check if there are unfinished frames behind us.
-        #if len(self.centroids) - 2 != self.last_finished:
-            # XXX backfill raw_positions, centroid_mas up to len - 2
-            # also adjust self.centroids?
-            # and increment self.last_finished
+        # Compute and append the raw position.
+        x, y, w, h = rectangle
+        self.raw_positions.append((x + w/2, y + h))
+        # If this is the first detection after an extrapolation,
+        # correct the extrapolated centroid data,
+        # and fill in raw positions and centroid moving averages.
+        if self.last_finished < len(self.centroids) - 2:
+            self.backfill_unfinished_frames(len(self.centroids) - 2)
         # At this point, everything is as if we have exact location data
         # for all frames up to this one.
         # Compute and append the centroid moving average.
         self.process_moving_average(len(self.centroids) - 1)
-        # Compute and append the raw position.
-        x, y, w, h = rectangle
-        self.raw_positions.append((x + w/2, y + h))
 
         self.last_finished += 1
 
@@ -501,25 +504,54 @@ class Player(object):
 
         self.centroids.append(extrapolated_position)
         self.rectangles.append(None)
-        # self.raw_positions?
-        # this is a temp one
+        self.raw_positions.append(None)
 
+    def backfill_unfinished_frames(self, fno):
+        """ Backfills unfinished frames up to fno, inclusive, if any,
+        using exact location data from frame fno+1 (the current frame).
+            - Readjusts self.centroids for the duration of the extrapolation.
+            - Fills in self.raw_positions.
+            - Fills in self.centroid_mas.
+        """
 
+        # Readjusting self.centroids, and fill in raw positions.
+        # Basically, just draw a line from the
+        # last exact detection to this exact detection.
+        num_frames_to_fill = (fno + 1) - self.last_finished
 
+        initial_centroid = np.array(self.centroids[self.last_finished])
+        initial_rp = np.array(self.raw_positions[self.last_finished])
 
-        # XXX TEMP
-        # hacky, to pretend all frames are finished and avoid backfilling
-        # but this leads to inaccurate extrapolated velocities if bounding rectangle
-        # forces a player to jump, which happens quite often!!
-        self.process_moving_average(len(self.centroids) - 1)  # XXX, temporary.
-        self.last_finished += 1  # XXXXXXXXX!!!!
+        final_centroid = np.array(self.centroids[fno + 1])
+        final_rp = np.array(self.raw_positions[fno + 1])
+
+        centroid_displacement = np.array(final_centroid - initial_centroid)
+        rp_displacement = np.array(final_rp - initial_rp)
+        # Fill in self.centroids from the frame after last_finished to
+        # fno, inclusive.
+        for i, k in enumerate(range(self.last_finished, fno + 1)):
+            if i == 0: continue  # The last finished frame, already finished.
+            assert num_frames_to_fill > 0
+            assert i < num_frames_to_fill
+            adjusted_centroid = initial_centroid + \
+                ((i * centroid_displacement) / num_frames_to_fill)
+            adjusted_rp = initial_rp + \
+                ((i * rp_displacement) / num_frames_to_fill)
+            self.centroids[k] = tuple(adjusted_centroid)
+            self.raw_positions[k] = tuple(adjusted_rp)
+
+        # Fill in the centroid moving averages, up to fno.
+        for k in range(self.last_finished + 1, fno + 1):
+            self.process_moving_average(k)
+            self.last_finished += 1
+
 
     def process_moving_average(self, fno):
         """ Compute the moving average for fno,
         using data from frames fno up to fno-4, and save it into the player.
         """
         # Make sure frames before fno are complete.
-        # assert len(self.centroid_mas) + 1 == self.last_finished
+        assert len(self.centroid_mas) - 1 == self.last_finished
         assert len(self.centroid_mas) == fno, \
             "Last finished frame was %r " + \
             "but we are computing moving average for %r" % \
