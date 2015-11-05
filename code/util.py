@@ -22,7 +22,7 @@ def quadrangleMask(pts, imgShape):
 
 def testMask():
     ## Corners and center
-    pts = np.zeros([7,2], dtype=np.int) 
+    pts = np.zeros([7,2], dtype=np.int)
     pts[0,:] = [2592, 199] # Top left
     pts[1,:] = [4892, 182] # Top right
     pts[2,:] = [5400, 288] # Goalie top left
@@ -30,11 +30,11 @@ def testMask():
     pts[4,:] = [5948, 408] # Goalie bottom right
     pts[5,:] = [8500, 990] # Bottom right
     pts[6,:] = [-100, 990] # Bottom left
-    
+
     img = cv2.imread('../images/stitched_background.png')
-    
+
     mask = quadrangleMask(pts, img.shape)
-    
+
     cv2.imwrite('../images/mask.png', img*mask)
 
 def rect_centroid(rect):
@@ -52,6 +52,24 @@ def euclidean_distance(p1, p2):
     result = np.linalg.norm(np.array(p1) - np.array(p2))
     assert result >= 0
     return result
+
+def dist_point_to_rect(point, rect):
+    """ Computes the shortest distance from a point to any edge of the
+    rectangle. If the point is within the rectangle, distance is 0.
+    Otherwise, the distance is manhattan.
+    Returns an int >= 0.
+    """
+    px, py = point
+    rx, ry, rw, rh = rect
+
+    dist_x1 = max(0, rx - px)
+    dist_x2 = max(0, px - (rx + rw))
+    dist_y1 = max(0, ry - py)
+    dist_y2 = max(0, py - (ry + rh))
+
+    dist_x = max(dist_x1, dist_x2)
+    dist_y = max(dist_y1, dist_y2)
+    return dist_x + dist_y
 
 if __name__ == '__main__':
     testMask()
