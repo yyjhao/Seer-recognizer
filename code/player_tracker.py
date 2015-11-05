@@ -15,7 +15,6 @@
 # unnecessary to track the player to the collision if we are already
 # extrapolating his position for resolution anyway.
 
-# Add bounding to player tracking during collisions.
 # Fix extrapolation (should be some sort of direction of moving average,
 # which we will have to start recording)
 # Implement collision -> (collision, collision) resolution as described
@@ -26,6 +25,7 @@
 
 import cv2
 import numpy as np
+import sys
 
 from player_detector import (
     Color,
@@ -37,6 +37,11 @@ from util import (
 )
 
 def test():
+    if len(sys.argv) != 2:
+        print "Usage: python %s <num_frames>" % sys.argv[0]
+        sys.exit()
+    NUM_FRAMES = int(sys.argv[1])
+
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
     NUM_SKIP = 2
     for i in range(NUM_SKIP):
@@ -46,7 +51,6 @@ def test():
     pt = PlayerTracker(players)
     print "Processed frame 0."
     i = 1
-    NUM_FRAMES = 2
     while i < NUM_FRAMES:
         _, frame = cap.read()
         rects = getPlayers(frame)
@@ -71,7 +75,7 @@ def test():
         for player in pt.players:
             rect = player.rectangles[i]
             if rect is not None:
-                loc = (rect[0] + rect[2] / 2, rect[1] + rect[3])
+                loc = player.centroids[i]
                 # print loc
                 cv2.circle(frame, loc, 5, player.color, -1)
                 cv2.putText(frame, str(player.pid), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
@@ -224,6 +228,9 @@ class PlayerTracker(object):
             argmin = np.array(centroid_distances).argmin()
 
             # See if we can resolve any players to nearby detections.
+            # XXX BUG: we have not processed claimers for collision blobs yet,
+            # so other collision blobs will look undetected... oops.
+            # but this should be fixed in collision splitting anyway
             unclaimed_rectangles = [
                 player_list[i] if len(detections[i].claimers) == 0 else None
                 for i in range(len(player_list))]
@@ -272,7 +279,7 @@ class PlayerTracker(object):
             for player in collision.players:
                 if player in tentative_exact_pos:
                     del tentative_exact_pos[player]
-                player.extrapolate_next_location()
+                player.extrapolate_next_location(collision.rectangle)
 
         # Now, all players in tentative_exact_pos are definitely not in collisions,
         # so they are no longer tentative -- let's save them!
@@ -312,6 +319,8 @@ class Collision(object):
         list_of_points, and index_player is the index of the matching player in
         this collision.
         """
+        # XXX BUG LOL we don't enforce that the last player in this collision
+        # is actually the same color as the detection, we should do that
         search_radius = (self.rectangle[2] + self.rectangle[3])  # Arbitrary.
         list_of_centroids = [
             (rect_centroid(x[0]), x[1])
@@ -393,9 +402,32 @@ class Player(object):
         # that the player goes undetected.
         self.search_radius = 50  # Arbitrary defualt value. May need to tweak.
 
+        # The index of the last "finished" frame; the last frame with exact
+        # position and tracking data.
+        # XXX TODO: at the end of the video, some players might be
+        # in extrapolating mode; we should set their locations.
+        self.last_finished = -1
+
         # XXX: Maybe move homography, smoothing, and distancing into here?
 
-        # -- Fields that are mandatory for every frame. --
+        # -- Fields that are mandatory for every tracking frame. --
+        # (That is, we MUST update these fields with every frame we process,
+        # because we need these fields to do tracking in the next frame.)
+
+        # Video position data. We use this to find the player in the next frame.
+        # We can also extrapolate this when detection data is unavailable,
+        # so we know where to search when detection reappears.
+        # Current implementation: centroid of the detection rectangle.
+        # (x int, y int).
+        self.centroids = []
+
+        # One type of player detection data.
+        # A list of the player's detected rectangles in frame order,
+        # or None if detection failed for the player in that frame.
+        # Rectangles are (x, y, width, height). Top left is 0, 0.
+        self.rectangles = []
+
+        # -- Fields that are mandatory for every finished frame. --
 
         # A list of the player's ground positions, on the raw video,
         # in frame order.
@@ -406,20 +438,11 @@ class Player(object):
         # We probably don't have to do this on the fly.
         self.raw_positions = []
 
-        # Video position data. We use this to find the player in the next frame.
-        # We can also extrapolate this when detection data is unavailable,
-        # so we know where to search when detection reappears.
-        # Current implementation: centroid of the detection rectangle.
-        # (x int, y int).
-        self.centroids = []
-
-        # -- Fields that are optional for every frame (might be None). --
-
-        # One type of player detection data.
-        # A list of the player's detected rectangles in frame order,
-        # or None if detection failed for the player in that frame.
-        # Rectangles are (x, y, width, height). Top left is 0, 0.
-        self.rectangles = []
+        # The moving average of the last five centroids. We use the *direction*
+        # of the moving average to extrapolate the direction of the player.
+        # This is necessary to minimize the effect of noise from outlier
+        # player centroids.
+        self.centroid_mas = []
 
     def set_next_location(self, centroid, rectangle):
         """ Provide the next frame's exact location data for this player.
@@ -428,41 +451,87 @@ class Player(object):
         """
         self.centroids.append(centroid)
         self.rectangles.append(rectangle)
-        # Set self.raw_positions as well, backfilling undetections if any.
-        # And adjust backfilled (zipping) centroids as well?
+        # Check if there are unfinished frames behind us.
+        #if len(self.centroids) - 2 != self.last_finished:
+            # XXX backfill raw_positions, centroid_mas up to len - 2
+            # also adjust self.centroids?
+            # and increment self.last_finished
+        # At this point, everything is as if we have exact location data
+        # for all frames up to this one.
+        # Compute and append the centroid moving average.
+        self.process_moving_average(len(self.centroids) - 1)
+        # Compute and append the raw position.
+        x, y, w, h = rectangle
+        self.raw_position.append((x + w/2), y + h)
 
-    def extrapolate_next_location(self):
+        self.last_finished += 1
+
+    def extrapolate_next_location(self, bounds=None):
         """ Extrapolate and set the player location data for the next frame.
-        This is just calculating and setting the predicted centroid.
+        This is just calculating and saving the predicted centroid.
+        bounds: a rectangle that the next location should be in. Used during
+        collisions.
         """
-        # XXX: a bounds parameter. in a collision, we KNOW the player
-        # is within the collision box.
+        # Implementation: We use the velocity of the last exact moving average.
+        if self.last_finished == 0:
+            extrapolated_velocity = np.array((0, 0))
+        else:
+            extrapolated_velocity = \
+                np.array(self.centroid_mas[self.last_finished]) - \
+                np.array(self.centroid_mas[self.last_finished - 1])
+
         # XXX: and search radius too? prolly dun need
 
-        # Currently, we'll do this by doing a flat average
-        # of velocity data from the past [up to] five centroids
-        # (four velocities).
-        extrapolated_velocity = np.array((0, 0))
-        samples = 0
-        last_frame = len(self.centroids) - 1
-        # XXX im retarded, fix this. this is no bueno at all
-        f2 = last_frame
-        while samples < 5:
-            f1 = f2 - 1
-            if f1 < 0: break
-            sample_velocity = np.array((
-                self.centroids[f2][0] - self.centroids[f1][0],
-                self.centroids[f2][1] - self.centroids[f1][1],
-            ))
-            extrapolated_velocity += sample_velocity
-            samples += 1
-            f2 = f1
-        if samples != 0:
-            extrapolated_velocity /= samples
-        last_pos = np.array(self.centroids[last_frame])
-        self.centroids.append(tuple(last_pos + extrapolated_velocity))
+        last_position = np.array(self.centroids[-1])
+        extrapolated_position = tuple(last_position + extrapolated_velocity)
+        # If the extrapolated position is outside of the bounds rectangle,
+        # move it to the nearest location within the rectangle.
+        if bounds is not None:
+            x, y, w, h = bounds
+            extrapolated_position = (
+                max(extrapolated_position[0], x),
+                max(extrapolated_position[1], y),
+            )
+            extrapolated_position = (
+                min(extrapolated_position[0], x + w),
+                min(extrapolated_position[1], y + h),
+            )
+
+        self.centroids.append(extrapolated_position)
         self.rectangles.append(None)
         # self.raw_positions?
+        # this is a temp one
+
+
+
+
+        # XXX TEMP
+        # hacky, to pretend all frames are finished and avoid backfilling
+        # but this leads to inaccurate extrapolated velocities if bounding rectangle
+        # forces a player to jump, which happens quite often!!
+        self.process_moving_average(len(self.centroids) - 1)  # XXX, temporary.
+        self.last_finished += 1  # XXXXXXXXX!!!!
+
+    def process_moving_average(self, fno):
+        """ Compute the moving average for fno,
+        using data from frames fno up to fno-4, and save it into the player.
+        """
+        # Make sure frames before fno are complete.
+        # assert len(self.centroid_mas) + 1 == self.last_finished
+        assert len(self.centroid_mas) == fno, \
+            "Last finished frame was %r " + \
+            "but we are computing moving average for %r" % \
+            (len(self.centroid_mas) - 1, fno)
+        centroid_ma = np.array((0, 0))
+        k = 0
+        while k < 5:
+            i = fno - k
+            if i < 0: break
+            centroid_ma += np.array(self.centroids[i])
+            k += 1
+        assert k > 0
+        centroid_ma /= k
+        self.centroid_mas.append(centroid_ma)
 
     # XXX i have no idea. currently disabled
     def reset_search_radius(self):
