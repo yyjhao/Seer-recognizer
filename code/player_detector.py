@@ -317,8 +317,6 @@ def generateVideoWithRect(inputVideoPath, inputPlayerPath, outputVideoPath):
     output = cv2.VideoWriter(outputVideoPath, fourcc, fps, movie_shape)
     
     for i in xrange(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))):
-        if i > 60:
-            break
         _, frame = cap.read()
 
         for player in players_list[i]:

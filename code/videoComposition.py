@@ -42,7 +42,7 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
     cv2.putText(img, team1Name, (170,620), cv2.FONT_HERSHEY_DUPLEX, 1, team1Color) 
     cv2.putText(img, team2Name, (550,620), cv2.FONT_HERSHEY_DUPLEX, 1, team2Color) 
     
-    capMain = cv2.VideoCapture('../videos/stitched.mpeg')
+    capMain = cv2.VideoCapture('../videos/stitched_rect.mpeg')
     capTopDown = cv2.VideoCapture('../videos/topDown.mpeg')
     
     fps = capMain.get(cv2.cv.CV_CAP_PROP_FPS)
@@ -78,6 +78,9 @@ def createMainVideo(team1Name, team1Color, team2Name, team2Color):
     # doublicate init image before writing
     imgCp = None
     for i in xrange(int(capMain.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT))-4):
+        print "doing", i
+        if i > 6953:
+            break
         imgCp = copy.copy(img)
         _, frame = capMain.read()
         

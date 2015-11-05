@@ -116,7 +116,7 @@ def homography(target_pts, source_pts):
 
 def createTopDownVideo():
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
-        players_list = [eval(line) for line in fin][4:]
+        players_list = [eval(line) for line in fin]
         
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     
@@ -212,8 +212,10 @@ def addPlayers(img, players, frameInd):
             playersOnTheField.append((player, (a[0], a[1])))
         except IndexError:
             print 'Player ' + str(ind) + ' out side the field!'
+
+        name = player[2] if player[1][1] > 0 else str(int(player[2])+1)
         cv2.putText(img, player[2], (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
-        cv2.putText(img, "Frame: " + frameInd, (100, 100), font, 1, (255, 255, 255), 2)
+        # cv2.putText(img, "Frame: " + frameInd, (100, 100), font, 1, (255, 255, 255), 2)
 
     return playersOnTheField, img
 
@@ -281,7 +283,7 @@ def evalMapping():
 
 def playerDataToSmoothedTopDown(inputFilePath):
     with open(inputFilePath) as fin:
-        players_list = [ eval(line) for line in fin ][4:]
+        players_list = [ eval(line) for line in fin ]
 
         for i in range(len(players_list)):
             players_list[i] = [p for p in players_list[i] if keepRect(p[0])]
@@ -343,7 +345,9 @@ def getDistancesWalkedFramewise(playerPos):
     for t, team in enumerate(playerPos):
         for p, player in enumerate(team):
             for i in xrange(1,player.shape[0]):
-                playerDist[t][p,i] = distanceBetweenCoordsTopDown(player[i-1], player[i]) + playerDist[t][p,i-1]
+                dist = distanceBetweenCoordsTopDown(player[i-1], player[i])
+                if dist > 1: dist = 1   # Remove outliers
+                playerDist[t][p,i] = dist + playerDist[t][p,i-1]
                 
     return playerDist
 
@@ -432,7 +436,7 @@ def drawOffsetLines(players, img, Hinv):
 
 if __name__ == '__main__':
     # evalMapping()
-    playerDataToSmoothedTopDown("players_cat.txt")
+    #playerDataToSmoothedTopDown("players_cat.txt")
     # _, playersPos = getPlayerWiseTopDown()
     #getDistancesWalkedFramewise(playerPos)
     # generateHeatmaps(playersPos)
