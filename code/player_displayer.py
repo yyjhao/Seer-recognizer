@@ -1,6 +1,9 @@
 '''
-Generates a video based on player.txt
+
+    Generates a video based on player.txt
+    
 '''
+
 import cv2
 import numpy as np
 import copy
@@ -22,15 +25,16 @@ FIELD_WIDTH = 105.0
 # Distance of one pixel
 PX_TO_M = FIELD_WIDTH / (WIDTH_TD_IMG - 2 * BORDER) 
 
+'''
+    Calculate the homography matrix to map the orignal field to the 
+    top down field using 21 manually selected points.
+    
+    @return 3x3 Homography matrix
+'''
 def getHomographyMatrix():
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     
-    # Define the 4 corner of the football field (target points), thereby the width will be kept and only the height adjusted
-    # so we don't accidently lose to many information
-    # [y,x]
-    
-    
-    # newImg = np.zeros([ratio*img.shape[1], img.shape[1],3])
+    # ========= The 21 points on the top down view ========= #    
     target_pts = np.zeros([21, 2])
     # y,x (row, col)
     target_pts[0, :] = [BORDER + 295, BORDER + 69]
@@ -56,7 +60,8 @@ def getHomographyMatrix():
     target_pts[19, :] = [img.shape[0] - 1 - BORDER, BORDER]  # Bottom left
     target_pts[20, :] = [(img.shape[0]) / 2, img.shape[1] / 2]  # Center points
     
-    # # Points on the image (row, col) == (y,x)
+    # ========= The 21 points on the normal field  ========= # 
+    # Point format (row, col) == (y,x)
     pts = np.zeros([21, 2])
     # # Special points on the image
     pts[0, :] = [300, 2370]  # A (in the white)
@@ -84,8 +89,16 @@ def getHomographyMatrix():
     
     # Calculate the homography matrix, which will be used to project any point from the video to the top down view.
     return homography(target_pts, pts) 
+
+'''
+    Uses a homography matrix to transform a 2d point on the source image
+    to a 2d point on the target image
+
+    @param H: Homography matrix
+    @param point: A tuple containing the row (y) and col (x) value of the to mapping point
     
-# Transforms 2d points to 2d points on another plane
+    @retun A tuple containing the row (y) and col (x) value of the new point.
+'''
 def getTransformationCoords(H, point):
     # Transform
     tmp = np.dot(H, np.array([point[0], point[1], 1]))
@@ -93,12 +106,29 @@ def getTransformationCoords(H, point):
     tmp = tmp / tmp[2]
     return [int(tmp[0]), int(tmp[1])]
     
+'''
+    Uses a inverted homography matrix to calculate 
+    from the target image to the source image
+    
+    @param Hinv: inverted homography matrix
+    @param row: The row (y) value of the to mapping point
+    @param col: The col (x) value of the to mapping point
+    
+    @retun A tuple containing the row (y) and col (x) value of the new point.
+'''
 def getInverseTransformationCoords(Hinv, row, col):
     tmp = np.dot(Hinv, np.array([row, col, 1]))
     tmp = tmp / tmp[2];
     return (int(tmp[0]), int(tmp[1]))
-        
-# I assume projPts=u_p,v_p, pts=u_c,v_c
+
+'''
+    Calculates the homograpgy matrix given source and target points.
+    
+    @param target_pts: The point on the image where the matrix should map points to.
+    @param source_pts: The point on the original image
+    
+    @return 3x3 Homography matrix
+'''
 def homography(target_pts, source_pts):
     A = np.zeros([target_pts.shape[0] * 2, 9])
     
@@ -114,15 +144,17 @@ def homography(target_pts, source_pts):
     # Normalize H and return the matrix
     return H / H[2][2]
 
+'''
+    Creates the top down video using the player data 
+    from the smoothed data file
+'''
 def createTopDownVideo():
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
         players_list = [eval(line) for line in fin]
         
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     
-    cap = cv2.VideoCapture('../videos/stitched.mpeg')
-
-    fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+    fps = 23
     movie_shape = (img.shape[1], img.shape[0])
 
     fourcc = cv2.cv.CV_FOURCC(*"MPEG")
@@ -135,7 +167,6 @@ def createTopDownVideo():
         _, newImg = addPlayers(newImg, players, str(i))
         output.write(newImg)
         
-    cap.release()
     output.release()
 
 def detectedPlayers(players_list, H):
@@ -155,6 +186,9 @@ def detectedPlayers(players_list, H):
             r[i].append((point, p.color, str(num)))
     return r
 
+'''
+    Same as getTransformationCorrds, just for points where y and x are switched.
+'''
 def project_point(point, H):
     row = point[1]
     col = point[0]
@@ -191,10 +225,17 @@ def smooth_num(num_list):
 def smooth(point_list):
     return zip(*[smooth_num(l) for l in zip(*point_list)])
 
+'''
+    Draw all players from the given player list on the top down field.
     
+    @param img: Image to draw the players on
+    @param players: The list of the players with their position
+    @param frameInd: ID of the frame, used for debugging
+    
+    @return A tuple, the first part contains the list of all player which have been drawn 
+                successfully on the map, the second part contains the image with the players drawn on
+'''
 font = cv2.FONT_HERSHEY_SIMPLEX
-# Add all players in the given players list to the field
-# img: image to add the 
 def addPlayers(img, players, frameInd):
     a = np.zeros([2])
     playersOnTheField = []
@@ -213,8 +254,9 @@ def addPlayers(img, players, frameInd):
         except IndexError:
             print 'Player ' + str(ind) + ' out side the field!'
 
-        name = player[2] if player[1][1] > 0 else str(int(player[2])+1)
+        name = player[2] if player[1][1] > 0 else str(int(player[2]) + 1)
         cv2.putText(img, player[2], (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
+
         # cv2.putText(img, "Frame: " + frameInd, (100, 100), font, 1, (255, 255, 255), 2)
 
     return playersOnTheField, img
@@ -232,6 +274,11 @@ def distanceBetweenCoordsTopDown(pos1, pos2):
         
     return distance * PX_TO_M
 
+'''
+    Evaluates the homography mapping by transforming 21 points from the original image 
+    to the top down view and draw them on the field and write this image to the disk.
+    Therewith, the user can easily see the precision of the mapping.
+'''
 def evalMapping():
     img = cv2.imread(PATH_TOP_DOWN_IMG)
     H = getHomographyMatrix()
@@ -281,6 +328,11 @@ def evalMapping():
     
     cv2.imwrite('EvalField1.jpg', img)        
 
+'''
+    Generates the smoothed top down player positions and writes them in a globally defined file.
+    
+    @param inputFilePath: the path to the file containing the player positions.
+'''
 def playerDataToSmoothedTopDown(inputFilePath):
     with open(inputFilePath) as fin:
         players_list = [ eval(line) for line in fin ]
@@ -294,13 +346,25 @@ def playerDataToSmoothedTopDown(inputFilePath):
         for frameData in smoothedData:
             fout.write(str(frameData))
             fout.write("\n")
-
+'''
+    Evaluation method to check wheater a rectangle should be kept or not (depending on the size)
+    
+    @param rect: The rectangle which should be checked (x,y,w,h)
+'''
 def keepRect(rect):
     if rect[1] + rect[3] > 950:
         print "removed a rect"
         return False
     return True
 
+'''
+    Convert the datastructure of the player which contains the positions and player 
+    ids for each frame to another data structure, providing for each team, for each 
+    player all his locations in a list, such that a heatmap or the walked distance 
+    can be created easily.
+    
+    @return Tuple with the framewise and playerwise data
+'''
 def getPlayerWiseTopDown():
     with open(PATH_SMOOTHED_TOP_DOWN_DATA) as fin:
         framewiseData = [eval(line) for line in fin]
@@ -339,31 +403,45 @@ def getPlayerWiseTopDown():
 
 '''
     Generates the distances each player walked
+    
+    @param The data structure containing for each player by team all his positions.
+    
+    @return The distances walked after each frame for each player by team
 '''
 def getDistancesWalkedFramewise(playerPos):
     playerDist = np.zeros((playerPos[0].shape[0], playerPos[0].shape[1])), np.zeros((playerPos[1].shape[0], playerPos[1].shape[1]))
     for t, team in enumerate(playerPos):
         for p, player in enumerate(team):
-            for i in xrange(1,player.shape[0]):
-                dist = distanceBetweenCoordsTopDown(player[i-1], player[i])
-                if dist > 1: dist = 1   # Remove outliers
-                playerDist[t][p,i] = dist + playerDist[t][p,i-1]
+            for i in xrange(1, player.shape[0]):
+                dist = distanceBetweenCoordsTopDown(player[i - 1], player[i])
+                if dist > 1: dist = 1  # Remove outliers
+                playerDist[t][p, i] = dist + playerDist[t][p, i - 1]
                 
     return playerDist
 
 '''
-    Generates a heatmap for each player
+    Generates a heatmap for each player and stores it on the disk.
+    
+    @param The data structure containing for each player by team all his positions.
 '''
 def generateHeatmaps(playerPos):
     for t, team in enumerate(playerPos):
         for p, player in enumerate(team):
-            print "Generate Heatmaps for team "+str(t)+" player "+str(p)
-            cv2.imwrite("../images/heatmaps/team"+str(t)+"_player"+str(p)+".png", heatmap.getFieldHeatmap(player))
+            print "Generate Heatmaps for team " + str(t) + " player " + str(p)
+            cv2.imwrite("../images/heatmaps/team" + str(t) + "_player" + str(p) + ".png", heatmap.getFieldHeatmap(player))
 
 
 '''
-    Parameters:
-        players: The framewise player data, with (x,y) coordinates
+    Draws a offside line on the normal view, depending on the positions of the players in the top down view.
+    If a player of the attacking team is closer to the goal than any defending player except the goaly,
+    then it will draw a line adjusted on the last defending player.
+    There can be no line, one line or even two lines.
+    
+    @param players: The framewise player data, with (x,y) coordinates
+    @param img: The image of the normal view to draw the line on
+    @param Hinv: The inverted homography matrix.
+    
+    @return the image of the field with the offside line if the they are necessary.
 '''
 def drawOffsetLines(players, img, Hinv):
     # blue is on the right side
@@ -393,51 +471,49 @@ def drawOffsetLines(players, img, Hinv):
     imgRightLine = None
     
     # Left = small number
-    if teamLeft_mostLeft > teamRight_mostLeft and teamRight_mostLeft < WIDTH_TD_IMG/2:
+    if teamLeft_mostLeft > teamRight_mostLeft and teamRight_mostLeft < WIDTH_TD_IMG / 2:
         # Offside on the left
         # Get coords of the line
-        #Hinv = np.linalg.inv(H)
-        topPt = getInverseTransformationCoords(Hinv,BORDER,teamLeft_mostLeft)
-        bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamLeft_mostLeft)
+        # Hinv = np.linalg.inv(H)
+        topPt = getInverseTransformationCoords(Hinv, BORDER, teamLeft_mostLeft)
+        bottomPt = getInverseTransformationCoords(Hinv, img.shape[0] - BORDER, teamLeft_mostLeft)
         
         # Blend the new line, such that it is transparent
         imgLeftLine = copy.copy(img) 
-        cv2.line(imgLeftLine, (topPt[1],topPt[0]), (bottomPt[1],bottomPt[0]),(0,0,255),10)
+        cv2.line(imgLeftLine, (topPt[1], topPt[0]), (bottomPt[1], bottomPt[0]), (0, 0, 255), 10)
         
         
     # If there is a player from the left team more right than any player from team right
     # and this player is on the right players half (right = large number)  
-    if teamLeft_mostRight > teamRight_mostRight and teamLeft_mostRight > WIDTH_TD_IMG/2:
+    if teamLeft_mostRight > teamRight_mostRight and teamLeft_mostRight > WIDTH_TD_IMG / 2:
         # Offside on the right
         # Get coords of the line
-        #Hinv = np.linalg.inv(H)
-        topPt = getInverseTransformationCoords(Hinv,BORDER,teamRight_mostRight)
-        bottomPt = getInverseTransformationCoords(Hinv,img.shape[0]-BORDER,teamRight_mostRight)
+        # Hinv = np.linalg.inv(H)
+        topPt = getInverseTransformationCoords(Hinv, BORDER, teamRight_mostRight)
+        bottomPt = getInverseTransformationCoords(Hinv, img.shape[0] - BORDER, teamRight_mostRight)
 
         # Blend the new line, such that it is transparent
         imgRightLine = copy.copy(img) 
-        cv2.line(imgRightLine, (topPt[1],topPt[0]), (bottomPt[1],bottomPt[0]),(0,0,255),10)
+        cv2.line(imgRightLine, (topPt[1], topPt[0]), (bottomPt[1], bottomPt[0]), (0, 0, 255), 10)
         
-    # Mostlikely therefore the first one 
+    # Most likely therefore the first one 
     if imgRightLine is None and imgLeftLine is None:
         return img
     
     if imgRightLine is not None and imgLeftLine is not None:
-        img = cv2.addWeighted(img,0.33333,imgRightLine,0.66667,0)
-        return cv2.addWeighted(img,0.6,imgLeftLine,0.4,0)
+        img = cv2.addWeighted(img, 0.33333, imgRightLine, 0.66667, 0)
+        return cv2.addWeighted(img, 0.6, imgLeftLine, 0.4, 0)
     
     if imgRightLine is not None:
-        return cv2.addWeighted(img,0.6,imgRightLine,0.4,0)
+        return cv2.addWeighted(img, 0.6, imgRightLine, 0.4, 0)
     
-    #if imgLeftLine is not None:
-    return cv2.addWeighted(img,0.6,imgLeftLine,0.4,0)
+    return cv2.addWeighted(img, 0.6, imgLeftLine, 0.4, 0)
     
-    #return img
 
 if __name__ == '__main__':
     # evalMapping()
-    #playerDataToSmoothedTopDown("players_cat.txt")
+    # playerDataToSmoothedTopDown("players_cat.txt")
     # _, playersPos = getPlayerWiseTopDown()
-    #getDistancesWalkedFramewise(playerPos)
+    # getDistancesWalkedFramewise(playerPos)
     # generateHeatmaps(playersPos)
     createTopDownVideo()
