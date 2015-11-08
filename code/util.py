@@ -2,17 +2,19 @@ import numpy as np
 import cv2
 
 '''
-    Parameters:
-        pts: 4x2 numpy array (e.g. np.zeros([4,2]))
+    Generates a mask whereby the given points are the corners. 
+    Everything with in the shape defined by the points is set 
+    to 1 and everything else to 0.
+    
+    @param pts: 4x2 numpy array (e.g. np.zeros([4,2]))
                 0: top left (row, col) == (y,x)
                 1: top right (row, col) == (y,x)
                 2: bottom right (row, col) == (y,x)
                 3: bottom left (row, col) == (y,x)
-        imgShape: tuple with the shape of the img (e.g. img.shape)
+    @param imgShape: tuple with the shape of the img (e.g. img.shape)
+    @return Return the mask
 '''
 def quadrangleMask(pts, imgShape):
-    # All the '+1' in this method are necessary to ensure that the given 4 points won't be removed.
-
     mask = np.zeros(imgShape)
     fill = 1
     if len(imgShape) == 3:
@@ -20,6 +22,9 @@ def quadrangleMask(pts, imgShape):
     cv2.fillConvexPoly(mask, pts, fill)
     return mask
 
+'''
+    Simple method the evaluate if the mask is working
+'''
 def testMask():
     ## Corners and center
     pts = np.zeros([7,2], dtype=np.int)
@@ -37,6 +42,14 @@ def testMask():
 
     cv2.imwrite('../images/mask.png', img*mask)
 
+'''
+    Deletes the first N lines of a input file and 
+    writes the result in another file.
+    
+    @param inputFilePath: Path to the input file
+    @param outputFilePath: Path to the output file
+    @param lines: Number of line which should be removed
+'''
 def deleteFirstNLines(inputFilePath, outputFilePath, lines):
     with open(inputFilePath,'r') as f:
         with open(outputFilePath,'w') as f1:

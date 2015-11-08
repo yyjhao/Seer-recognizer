@@ -11,14 +11,17 @@ import heatmap
 from player_tracker import PlayerTracker
 from player_detector import Color
 
+# Path to the smoothed data, as it is intermediate data, 
+# there is no need to make is flexible for the user
 PATH_SMOOTHED_TOP_DOWN_DATA = "players_smoothedTopDown.txt"
 
+# Top Down Field data, dimensions and the path
 BORDER = 100
 PATH_TOP_DOWN_IMG = '../images/FootballField_small_border.png'
 WIDTH_TD_IMG = 1400
 HEIGHT_TD_IMG = 1000
 
-# Dimensions of the field in m without borders
+# Dimensions of the field in m without borders, measured using google maps
 FIELD_HEIGHT = 70.0
 FIELD_WIDTH = 105.0
 
@@ -107,21 +110,6 @@ def getTransformationCoords(H, point):
     return [int(tmp[0]), int(tmp[1])]
     
 '''
-    Uses a inverted homography matrix to calculate 
-    from the target image to the source image
-    
-    @param Hinv: inverted homography matrix
-    @param row: The row (y) value of the to mapping point
-    @param col: The col (x) value of the to mapping point
-    
-    @retun A tuple containing the row (y) and col (x) value of the new point.
-'''
-def getInverseTransformationCoords(Hinv, row, col):
-    tmp = np.dot(Hinv, np.array([row, col, 1]))
-    tmp = tmp / tmp[2];
-    return (int(tmp[0]), int(tmp[1]))
-
-'''
     Calculates the homograpgy matrix given source and target points.
     
     @param target_pts: The point on the image where the matrix should map points to.
@@ -169,6 +157,14 @@ def createTopDownVideo():
         
     output.release()
 
+'''
+    Smooth's the input data and runs the tracker.
+    
+    @param players: The list of the players with their position
+    @param H: Homography matrix
+    
+    @return the smoothed player_list
+'''
 def detectedPlayers(players_list, H):
     counters = {}
     tracker = PlayerTracker(players_list[0])
@@ -241,6 +237,7 @@ def addPlayers(img, players, frameInd):
     playersOnTheField = []
     for ind, player in enumerate(players):
         a = (player[0][1], player[0][0])
+        # Try to draw the player symbol, if it fails print the player name to stdout
         try:
             for i in xrange(5):
                 for j in xrange(5):
@@ -254,8 +251,10 @@ def addPlayers(img, players, frameInd):
         except IndexError:
             print 'Player ' + str(ind) + ' out side the field!'
 
+        # Increase the index by one if it is a field player of the red or blue team
+        # so referee and goalies are 1 and the remaining players start with index 2.
         name = player[2] if player[1][1] > 0 else str(int(player[2]) + 1)
-        cv2.putText(img, player[2], (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
+        cv2.putText(img, name, (a[1] - 30, a[0] - 10), font, 1, player[1], 2)
 
         # cv2.putText(img, "Frame: " + frameInd, (100, 100), font, 1, (255, 255, 255), 2)
 
@@ -310,6 +309,7 @@ def evalMapping():
     pts[19, :] = [942, 40]  # Bottom left (outer coord)
     pts[20, :] = [350, 3767]  # Center
     
+    # Map all points and draw them on the field.
     a = np.zeros([2])
     i = 0
     for pt in pts:
@@ -334,14 +334,17 @@ def evalMapping():
     @param inputFilePath: the path to the file containing the player positions.
 '''
 def playerDataToSmoothedTopDown(inputFilePath):
+    # Read the player data from a file
     with open(inputFilePath) as fin:
         players_list = [ eval(line) for line in fin ]
-
+        
+        # Generate the smoothed data
         for i in range(len(players_list)):
             players_list[i] = [p for p in players_list[i] if keepRect(p[0])]
         H = getHomographyMatrix()
         smoothedData = detectedPlayers(players_list, H)
 
+    # Write the output to a file
     with open(PATH_SMOOTHED_TOP_DOWN_DATA, 'w') as fout:
         for frameData in smoothedData:
             fout.write(str(frameData))
@@ -413,8 +416,11 @@ def getDistancesWalkedFramewise(playerPos):
     for t, team in enumerate(playerPos):
         for p, player in enumerate(team):
             for i in xrange(1, player.shape[0]):
+                # Calculate the distance
                 dist = distanceBetweenCoordsTopDown(player[i - 1], player[i])
-                if dist > 1: dist = 1  # Remove outliers
+                # Remove outliers
+                if dist > 1: dist = 1
+                # Sum the distance from this and all previous frames
                 playerDist[t][p, i] = dist + playerDist[t][p, i - 1]
                 
     return playerDist
@@ -454,6 +460,7 @@ def drawOffsetLines(players, img, Hinv):
     teamRight_mostLeft = 9999999
     teamRight_mostRight = -1
     
+    # Get the left and right most players of both fields which aren't goalies.
     for player in players:
         if player[1] == left:
             if player[0][0] < teamLeft_mostLeft:
@@ -470,27 +477,25 @@ def drawOffsetLines(players, img, Hinv):
     imgLeftLine = None
     imgRightLine = None
     
-    # Left = small number
+    # If there is a player from the right team more left than any player from team left
+    # and this player is on the left players half (left = small number)
+    # --> Offside on the left
     if teamLeft_mostLeft > teamRight_mostLeft and teamRight_mostLeft < WIDTH_TD_IMG / 2:
-        # Offside on the left
         # Get coords of the line
-        # Hinv = np.linalg.inv(H)
-        topPt = getInverseTransformationCoords(Hinv, BORDER, teamLeft_mostLeft)
-        bottomPt = getInverseTransformationCoords(Hinv, img.shape[0] - BORDER, teamLeft_mostLeft)
+        topPt = getTransformationCoords(Hinv, BORDER, teamLeft_mostLeft)
+        bottomPt = getTransformationCoords(Hinv, img.shape[0] - BORDER, teamLeft_mostLeft)
         
         # Blend the new line, such that it is transparent
         imgLeftLine = copy.copy(img) 
         cv2.line(imgLeftLine, (topPt[1], topPt[0]), (bottomPt[1], bottomPt[0]), (0, 0, 255), 10)
         
-        
     # If there is a player from the left team more right than any player from team right
     # and this player is on the right players half (right = large number)  
+    # --> Offside on the right
     if teamLeft_mostRight > teamRight_mostRight and teamLeft_mostRight > WIDTH_TD_IMG / 2:
-        # Offside on the right
         # Get coords of the line
-        # Hinv = np.linalg.inv(H)
-        topPt = getInverseTransformationCoords(Hinv, BORDER, teamRight_mostRight)
-        bottomPt = getInverseTransformationCoords(Hinv, img.shape[0] - BORDER, teamRight_mostRight)
+        topPt = getTransformationCoords(Hinv, (BORDER, teamRight_mostRight))
+        bottomPt = getTransformationCoords(Hinv, (img.shape[0] - BORDER, teamRight_mostRight))
 
         # Blend the new line, such that it is transparent
         imgRightLine = copy.copy(img) 
@@ -507,6 +512,7 @@ def drawOffsetLines(players, img, Hinv):
     if imgRightLine is not None:
         return cv2.addWeighted(img, 0.6, imgRightLine, 0.4, 0)
     
+    # Last possibility
     return cv2.addWeighted(img, 0.6, imgLeftLine, 0.4, 0)
     
 

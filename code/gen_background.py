@@ -1,9 +1,5 @@
 import cv2
-import cv2.cv as cv
 import numpy as np
-import stitcher
-import matplotlib.pyplot as plt
-import sys
 
 background = cv2.imread("../images/stitched_frames/0.png")
 background = np.zeros(background.shape)
