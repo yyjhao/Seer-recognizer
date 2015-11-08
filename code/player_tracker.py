@@ -44,12 +44,12 @@ def test():
     NUM_SKIP = int(sys.argv[1])
     assert NUM_SKIP >= 3
     NUM_FRAMES = int(sys.argv[2])
-
-    with open("players_1533.txt") as fin:
+    
+    with open("players_cat_wo4.txt") as fin:
         playersList = (eval(line) for line in fin)
 
     # cap = cv2.VideoCapture('../videos/stitched.mpeg')
-        i = 3
+        i = 4
         players = playersList.next()
         pt = PlayerTracker(players)
         print "Processed frame %r." % i
@@ -67,8 +67,15 @@ def test():
     cap = cv2.VideoCapture('../videos/stitched.mpeg')
     for i in range(NUM_SKIP):
         cap.grab()
+    
+    fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
+    movie_shape = (1920, 732)
+    fourcc = cv2.cv.CV_FOURCC(*"MPEG")
+    output = cv2.VideoWriter('../videos/player_tracker.mpeg', fourcc, fps, movie_shape)
+    
+    
     for k in range(NUM_SKIP, NUM_SKIP + NUM_FRAMES):
-        i = k - 3
+        i = k - 4
         _, frame = cap.read()
         print "Frame %r:" % k
         # Draw the detection rectangles.
@@ -89,8 +96,14 @@ def test():
                 print "Player %r: %r (extrapolated)" % (player.pid, loc)
                 cv2.circle(frame, loc, 5, (255, 255, 255), -1)
                 cv2.putText(frame, str(player.pid), loc, cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=2)
-        cv2.imwrite('../images/player_tracking/%s.png' % k, frame)
+        
+        # Crop a part of the video to see better details
+        tmp = frame[:,2800:5500]
+        resized_image = cv2.resize(tmp, (1920, 732))
+        output.write(resized_image)
+        #cv2.imwrite('../images/player_tracking/%s.png' % k, frame)
 
+    output.release()
 
 
 class PlayerTracker(object):
