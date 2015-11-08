@@ -11,6 +11,14 @@ def remove_left(img, left):
     return img
 
 
+# Gloabl variable sof raching the masks
+left_cached = False
+right_cached = False
+
+left_intersect = None
+right_intersect = None
+left_intersect_line = None
+right_intersect_line = None
 # This function overlaps 2 images together
 # algorithm:
 # To exploit the fast matrix operation of numpy (using forloop will be extremely slow!)
@@ -76,13 +84,19 @@ def stitch_pics(l, m, r, atran, lptran, rptran, leftonetran, right_add, left_add
 
 
 def stitch():
+    global left_cached
+    global right_cached
+    global left_intersect_line
+    global right_intersect_line
+    global left_intersect
+    global right_intersect
     right_add = 3600
     left_add = 2700
     top_cutoff = 50
 
     lsrc = np.zeros((4, 2), dtype="float32")
     ldst = np.zeros((4, 2), dtype="float32")
-    
+
     # hand ajusted quadrangle vertices to compute the perspective transform matrix
     lsrc[0] = [447, 660]
     lsrc[1] = [1763, 314]
@@ -93,9 +107,9 @@ def stitch():
     ldst[1] = [5245 - 5000 + left_add - 7, 243]
     ldst[2] = [5408 - 5000 + left_add - 28, 242]
     ldst[3] = [5231 - 5000 + left_add - 40, 1010]
-    
+
     lptran = cv2.getPerspectiveTransform(lsrc, ldst)
-    
+
     lsrc[0] = [0, 226]
     lsrc[1] = [0, 1056]
     lsrc[2] = [475, 924]
@@ -105,9 +119,9 @@ def stitch():
     ldst[1] = [6435 - 5000 + left_add, 1003]
     ldst[2] = [6920 - 5000 + left_add + 5, 1002]
     ldst[3] = [6920 - 5000 + left_add + 25, 230]
-    
+
     rptran = cv2.getPerspectiveTransform(lsrc, ldst)
-    
+
     # affine transform matrix to move the middle frame to the right
     atran = np.float32([[1, 0, left_add], [0, 1, 0]])
     # affine transform matrix to cut of some part of the top
@@ -118,7 +132,7 @@ def stitch():
     # cache for mask images
     left_cached = False
     right_cached = False
-    
+
     left_intersect = None
     right_intersect = None
     left_intersect_line = None

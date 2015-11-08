@@ -4,7 +4,6 @@
 # pixels of every frame in the video
 
 import cv2
-import numpy as np
 
 cap = cv2.VideoCapture("./stitched.mpeg")
 frame_width = int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH))
