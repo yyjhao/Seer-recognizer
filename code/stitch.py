@@ -166,6 +166,7 @@ def stitch():
         if not (retl and retm and retr):
             break
         output.write(cv2.warpAffine(stitch_pics(l, m, r, atran, lptran, rptran, leftonetran, right_add, left_add), toptran, movie_shape))
+        cv2.imwrite(str(count) + ".png")
     
     output.release()
 
