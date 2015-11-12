@@ -1,3 +1,4 @@
+import gen_background # importing it runs the code :)
 import player_displayer
 import player_detector
 from videoComposition import createFinalVideo
