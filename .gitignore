@@ -2,9 +2,9 @@
 *.psd
 videos/
 images/player_detection/*
-images/stitched_frames/*
+images/stitched_frames/*.png
 images/player_tracking/*
-images/heatmaps
+images/heatmaps/*.png
 !images/player_tracking/.syncfolder
 
 # Ignore temp output in the code folder
