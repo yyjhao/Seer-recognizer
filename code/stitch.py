@@ -138,9 +138,9 @@ def stitch():
     left_intersect_line = None
     #right_intersect_line = None
 
-    mid = cv2.VideoCapture("./football_mid.mp4")
-    left = cv2.VideoCapture("./football_left.mp4")
-    right = cv2.VideoCapture("./football_right.mp4")
+    mid = cv2.VideoCapture("../videos/football_mid.mp4")
+    left = cv2.VideoCapture("../videos/football_left.mp4")
+    right = cv2.VideoCapture("../videos/football_right.mp4")
 
     #left_w = left.get(cv.CV_CAP_PROP_FRAME_WIDTH)
     mid_w = mid.get(cv.CV_CAP_PROP_FRAME_WIDTH)
@@ -154,7 +154,7 @@ def stitch():
     
     # have to use MPEG cuz huge dimension
     fourcc = cv2.cv.CV_FOURCC(*"MPEG")
-    output = cv2.VideoWriter('./stitched.mpeg', fourcc, fps, movie_shape)
+    output = cv2.VideoWriter('../videos/stitched.mpeg', fourcc, fps, movie_shape)
     
     count = 0
     while True:
@@ -166,7 +166,7 @@ def stitch():
         if not (retl and retm and retr):
             break
         output.write(cv2.warpAffine(stitch_pics(l, m, r, atran, lptran, rptran, leftonetran, right_add, left_add), toptran, movie_shape))
-        cv2.imwrite(str(count) + ".png")
+        cv2.imwrite("../images/stitched_frames/{}.png".format(count))
     
     output.release()
 

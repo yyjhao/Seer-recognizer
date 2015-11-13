@@ -151,7 +151,7 @@ def getPlayers(frame):
     binary_frame[shadowMask(frame_hsv)] = 0
 
     # Find all outer contours in the binary image
-    contours, h = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
+    contours, _ = cv2.findContours(binary_frame, cv2.RETR_EXTERNAL,
                                    cv2.CHAIN_APPROX_SIMPLE)
 
     # Filter out contours that are not players on the field
@@ -278,7 +278,7 @@ def generatePlayersList():
 
             print "frame", k
 
-def generateVideoWithRect(inputVideoPath, inputPlayerPath, outputVideoPath):
+def generateVideoWithRect(inputPlayerPath, outputVideoPath):
     with open(inputPlayerPath) as fin:
         players_list = [ eval(line) for line in fin ]
         

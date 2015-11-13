@@ -146,7 +146,7 @@ def createTopDownVideo():
     movie_shape = (img.shape[1], img.shape[0])
 
     fourcc = cv2.cv.CV_FOURCC(*"MPEG")
-    output = cv2.VideoWriter('./topDown.mpeg', fourcc, fps, movie_shape)
+    output = cv2.VideoWriter('../videos/topDown.mpeg', fourcc, fps, movie_shape)
     
     for i, players in enumerate(players_list):
         newImg = copy.copy(img)
